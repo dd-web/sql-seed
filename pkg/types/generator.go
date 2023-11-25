@@ -1,6 +1,8 @@
 package types
 
-import "math/rand"
+import (
+	"math/rand"
+)
 
 // word generation settings - words are counted by letters.
 var lorem_word_min_length = 3
@@ -18,34 +20,34 @@ var lorem_paragraph_max_length = 7
 var lorem_min_paragraphs = 1
 var lorem_max_paragraphs = 6
 
-// the upper case starting and end bounds for runes/ascii
-var upper_alpha_start rune = 65
-var upper_alpha_end rune = 90
+// offset bitmask for converting upper case to lower case
+var upper_to_lower_offset_mask rune = 0x20
 
-// the lower case starting and end bounds for runes/ascii
-var lower_alpha_start rune = 97
-var lower_alpha_end rune = 122
+// the lower case starting and end bound masks
+var lower_alpha_start rune = 0x61
+var lower_alpha_end rune = 0x7a
 
-// special characters in ascii
+// special character map
 var special_chars = map[string]rune{
-	" ":  32,
-	"\"": 34,
-	"'":  39,
-	"-":  45,
-	".":  46,
-	"/":  47,
+	"SPACE":         0x20,
+	"FULL-QUOTE":    0x22,
+	"APOSTROPHE":    0x27,
+	"HYPHEN":        0x2d,
+	"PERIOD":        0x2e,
+	"FORWARD-SLASH": 0x2f,
 
-	"<": 60,
-	"=": 61,
-	">": 62,
-	"?": 63,
+	"LESS-THAN":    0x3c,
+	"EQUALS":       0x3d,
+	"GREATER-THAN": 0x3e,
+	"QUESTION":     0x3f,
 
-	"[":  91,
-	"\\": 92,
-	"]":  93,
-	"^":  94,
-	"_":  95,
-	"`":  96,
+	"LEFT-BRACKET":   0x5b,
+	"BACKWARD-SLASH": 0x5c,
+	"RIGHT-BRACKET":  0x5d,
+	"CARET":          0x5e,
+	"UNDERSCORE":     0x5f,
+	"TILDA":          0x60,
+	"CRLF":           0x0a,
 }
 
 /*************************************************************************************************************/
@@ -260,7 +262,7 @@ func (l *Lorem) word() string {
 	word := ""
 	wordLen := RandomBetween(l.Cfg.MinWordLength, l.Cfg.MaxWordLength)
 	for i := 0; i < wordLen; i++ {
-		word += string(RandomBetween(int(lower_alpha_start), int(lower_alpha_end)))
+		word += string(RandomBetween[rune](lower_alpha_start, lower_alpha_end))
 	}
 	return word
 }
@@ -268,34 +270,31 @@ func (l *Lorem) word() string {
 // generates a random sentence defined by the configuration
 func (l *Lorem) sentence() string {
 	sentence := ""
-	wordCount := RandomBetween(l.Cfg.MinSentenceLength, l.Cfg.MaxSentenceLength)
+	wordCount := RandomBetween[int](l.Cfg.MinSentenceLength, l.Cfg.MaxSentenceLength)
 	for i := 0; i < wordCount; i++ {
 		if i > 0 {
-			sentence += " "
+			sentence += string(special_chars["SPACE"])
 		}
 		sentence += l.word()
 	}
-
 	if l.Cfg.CapitalizeFirst && len(sentence) > 0 {
-		sentence = string(upper_alpha_start) + sentence[1:]
+		fl := rune(sentence[0])
+		sentence = string(fl-upper_to_lower_offset_mask) + sentence[1:]
 	}
-
 	if l.Cfg.Punctuation && len(sentence) > 0 {
 		sentence += l.punctuation()
 	}
-
 	return sentence
 }
 
 // generates a random paragraph defined by the configuration
 func (l *Lorem) paragraph() string {
-	paragraph := "  "
+	paragraph := string(special_chars["SPACE"]) + string(special_chars["SPACE"])
 	sentenceCount := RandomBetween(l.Cfg.MinParagraphLength, l.Cfg.MaxParagraphLength)
 	for i := 0; i < sentenceCount; i++ {
-		paragraph = paragraph + " " + l.sentence()
+		paragraph = paragraph + string(special_chars["SPACE"]) + l.sentence()
 	}
-
-	return paragraph + "\n\n"
+	return paragraph + string(special_chars["CRLF"]) + string(special_chars["CRLF"])
 }
 
 // grabs a weighted punctuation character from the configuration
@@ -318,10 +317,10 @@ func (l *Lorem) punctuation() string {
 		}
 	}
 
-	return "."
+	return string(special_chars["PERIOD"])
 }
 
 // wraps the content with the given tag as an html tag
 func WrapHTMLTag(tag, content string) string {
-	return string(special_chars["<"]) + tag + string(special_chars[">"]) + content + string(special_chars["<"]) + "/" + tag + string(special_chars[">"])
+	return string(special_chars["LESS-THAN"]) + tag + string(special_chars["GREATER-THAN"]) + content + string(special_chars["LESS-THAN"]) + string(special_chars["FORWARD-SLASH"]) + tag + string(special_chars["GREATER-THAN"])
 }
