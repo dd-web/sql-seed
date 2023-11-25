@@ -7,7 +7,12 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// postgres connection string format
+// used to create a connection string for connecting to postgres
 var sql_conn_fmt string = "user=%s password=%s dbname=%s host=%s port=%s sslmode=%s"
+
+// debug mode for printing sql results
+var debug_mode = false
 
 // postgres connection config object
 type PGConfig struct {
@@ -61,6 +66,43 @@ func (s *Store) Execute(query string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%+v\n", res)
+
+	if debug_mode {
+		fmt.Printf("[SQL RESULT]: %+v\n", res)
+	}
+	return nil
+}
+
+type SQLStringer interface {
+	Insert() string
+	// Select() string
+	// Update() string
+	// Delete() string
+}
+
+func GetSQLInsert(s SQLStringer) string {
+	return s.Insert()
+}
+
+// func GetSQLSelect(s SQLStringer) string {
+// 	return s.Select()
+// }
+
+func (s *Store) SeedThread(account_id int) error {
+	identity := &Identity{
+		AccountID: account_id,
+		RoleID:    3,                // 3 for creator
+		StyleID:   1,                // 1 for default
+		Name:      "X7DmfZF9ddzggj", // random string for alias
+	}
+	str := identity.Insert()
+	// create identity for account
+
+	// create thread_content
+
+	// create thread
+
+	// create thread_identity
+
 	return nil
 }
