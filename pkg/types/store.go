@@ -89,6 +89,11 @@ func GetSQLInsert(s SQLStringer) string {
 // }
 
 func (s *Store) SeedThread(account_id int) error {
+	// a paragraph or two
+	para := NewLorem()
+	content := para.Generate()
+	fmt.Println(content)
+
 	identity := &Identity{
 		AccountID: account_id,
 		RoleID:    3,                // 3 for creator
@@ -96,6 +101,7 @@ func (s *Store) SeedThread(account_id int) error {
 		Name:      "X7DmfZF9ddzggj", // random string for alias
 	}
 	str := identity.Insert()
+	fmt.Println(str)
 	// create identity for account
 
 	// create thread_content

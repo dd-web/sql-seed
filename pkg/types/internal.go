@@ -4,7 +4,11 @@
 
 package types
 
-import "time"
+import (
+	"time"
+
+	gonanoid "github.com/matoous/go-nanoid/v2"
+)
 
 // Accounts are synonymous with users - they just hold data about the person
 // currently logged in. it's used mostly to save favorites, keeping the same
@@ -673,3 +677,37 @@ func (is IdentityStyle) Int() int {
 func (is IdentityStyle) ID() int {
 	return is.Int()
 }
+
+/*************************************************************************************************************/
+/*************************************************************************************************************/
+
+// character pool for generating identity slugs
+var IdentitySlugAlphabet string = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-"
+
+// character pool for generating thread slugs
+var ThreadSlugAlphabet string = "abcdefghijklmnopqrstuvwxyz0123456789-"
+
+// min & max length of identity slugs
+var IdentitySlugMinLength int = 8
+var IdentitySlugMaxLength int = 10
+
+// min & max length of thread slugs
+var ThreadSlugMinLength int = 12
+var ThreadSlugMaxLength int = 16
+
+// create and return an identity slug
+func GetIdentitySlug() string {
+	slen := RandomBetween(IdentitySlugMinLength, IdentitySlugMaxLength)
+	slug, _ := gonanoid.Generate(IdentitySlugAlphabet, slen)
+	return slug
+}
+
+// create and return a thread slug
+func GetThreadSlug() string {
+	slen := RandomBetween(ThreadSlugMinLength, ThreadSlugMaxLength)
+	slug, _ := gonanoid.Generate(ThreadSlugAlphabet, slen)
+	return slug
+}
+
+/*************************************************************************************************************/
+/*************************************************************************************************************/
