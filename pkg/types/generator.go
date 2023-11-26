@@ -1,201 +1,172 @@
 package types
 
 import (
-	"math/rand"
+	"strconv"
+
+	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
-// word generation settings - words are counted by letters.
-var lorem_word_min_length = 3
-var lorem_word_max_length = 10
+/***************************/
+/* LOREM / TEXT GENERATION */
+/***************************/
 
-// sentence generation settings - sentences are counted by words.
-var lorem_sentence_min_length = 8
-var lorem_sentence_max_length = 18
+var (
+	lorem_word_min_length      int = 3
+	lorem_word_max_length      int = 10
+	lorem_sentence_min_length  int = 8
+	lorem_sentence_max_length  int = 18
+	lorem_paragraph_min_length int = 3
+	lorem_paragraph_max_length int = 7
+	lorem_min_paragraphs       int = 1
+	lorem_max_paragraphs       int = 6
 
-// paragraph generation settings - paragraphs are counted by sentences.
-var lorem_paragraph_min_length = 3
-var lorem_paragraph_max_length = 7
+	upper_to_lower_offset_mask rune = 0x20
+	lower_alpha_start          rune = 0x61
+	lower_alpha_end            rune = 0x7a
 
-// the minimum and maximum number of paragraphs to generate
-var lorem_min_paragraphs = 1
-var lorem_max_paragraphs = 6
+	special_chars = map[string]rune{
+		"SPACE":         0x20,
+		"FULL-QUOTE":    0x22,
+		"APOSTROPHE":    0x27,
+		"HYPHEN":        0x2d,
+		"PERIOD":        0x2e,
+		"FORWARD-SLASH": 0x2f,
 
-// offset bitmask for converting upper case to lower case
-var upper_to_lower_offset_mask rune = 0x20
+		"LESS-THAN":    0x3c,
+		"EQUALS":       0x3d,
+		"GREATER-THAN": 0x3e,
+		"QUESTION":     0x3f,
 
-// the lower case starting and end bound masks
-var lower_alpha_start rune = 0x61
-var lower_alpha_end rune = 0x7a
+		"LEFT-BRACKET":   0x5b,
+		"BACKWARD-SLASH": 0x5c,
+		"RIGHT-BRACKET":  0x5d,
+		"CARET":          0x5e,
+		"UNDERSCORE":     0x5f,
+		"TILDA":          0x60,
+		"CRLF":           0x0a,
+	}
 
-// special character map
-var special_chars = map[string]rune{
-	"SPACE":         0x20,
-	"FULL-QUOTE":    0x22,
-	"APOSTROPHE":    0x27,
-	"HYPHEN":        0x2d,
-	"PERIOD":        0x2e,
-	"FORWARD-SLASH": 0x2f,
+	safe_special_chars = []rune{
+		special_chars["HYPHEN"],
+		special_chars["UNDERSCORE"],
+		special_chars["PERIOD"],
+		special_chars["CARET"],
+	}
+)
 
-	"LESS-THAN":    0x3c,
-	"EQUALS":       0x3d,
-	"GREATER-THAN": 0x3e,
-	"QUESTION":     0x3f,
-
-	"LEFT-BRACKET":   0x5b,
-	"BACKWARD-SLASH": 0x5c,
-	"RIGHT-BRACKET":  0x5d,
-	"CARET":          0x5e,
-	"UNDERSCORE":     0x5f,
-	"TILDA":          0x60,
-	"CRLF":           0x0a,
-}
-
-/*************************************************************************************************************/
-/*************************************************************************************************************/
-
-// below defines lorem types and configuration types to make configuration options easier to use
-// defaults will be used if no configuration is given (set via config fns)
-
-// container struct for our generation
 type Lorem struct {
-	// output
 	Output string
-
-	// configuration
-	Cfg *LoremConfig
+	Cfg    *LoremConfig
 }
 
-// lorem config struct
+type LoremConfigFunc func(*LoremConfig) *LoremConfig
 type LoremConfig struct {
-	/* word length settings */
-	MinWordLength int
-	MaxWordLength int
+	minWordLength      int
+	maxWordLength      int
+	minSentenceLength  int
+	maxSentenceLength  int
+	minParagraphLength int
+	maxParagraphLength int
+	minParagraphs      int
+	maxParagraphs      int
 
-	/* sentence length settings */
-	MinSentenceLength int
-	MaxSentenceLength int
+	capitalizeFirst bool
+	punctuation     bool
 
-	/* paragraph length settings */
-	MinParagraphLength int
-	MaxParagraphLength int
-	MinParagraphs      int
-	MaxParagraphs      int
+	punctuationChars []string
 
-	/* sentence settings */
-	CapitalizeFirst bool
-	Punctuation     bool
-
-	/* defines a set of characters available to be selected as a termination character for a sentence */
-	PunctuationChars []string
-
-	/* gives each punctuation character a weight, which is used to determine the likelihood of it being selected */
-	/* weights don't need to add up to 100, it's just easier to set a default this way. */
-	PunctuationWeights map[string]int
+	punctuationWeights map[string]int
 }
 
-// default lorem configuration
 func defaultLoremConfig() *LoremConfig {
 	return &LoremConfig{
-		MinWordLength:      lorem_word_min_length,
-		MaxWordLength:      lorem_word_max_length,
-		MinSentenceLength:  lorem_sentence_min_length,
-		MaxSentenceLength:  lorem_sentence_max_length,
-		MinParagraphLength: lorem_paragraph_min_length,
-		MaxParagraphLength: lorem_paragraph_max_length,
-		MinParagraphs:      lorem_min_paragraphs,
-		MaxParagraphs:      lorem_max_paragraphs,
-		CapitalizeFirst:    true,
-		Punctuation:        true,
-		PunctuationChars:   []string{".", "!", "?"},
-		PunctuationWeights: map[string]int{".": 85, "!": 10, "?": 5},
+		minWordLength:      lorem_word_min_length,
+		maxWordLength:      lorem_word_max_length,
+		minSentenceLength:  lorem_sentence_min_length,
+		maxSentenceLength:  lorem_sentence_max_length,
+		minParagraphLength: lorem_paragraph_min_length,
+		maxParagraphLength: lorem_paragraph_max_length,
+		minParagraphs:      lorem_min_paragraphs,
+		maxParagraphs:      lorem_max_paragraphs,
+		capitalizeFirst:    true,
+		punctuation:        true,
+		punctuationChars:   []string{".", "!", "?"},
+		punctuationWeights: map[string]int{".": 20, "!": 1, "?": 1},
 	}
 }
-
-// defines a configuration function to modify the configuration - must be called on lorem instantiation
-type LoremConfigFunc func(*LoremConfig) *LoremConfig
 
 /*******************************/
 /*** CONFIGURATION FUNCTIONS ***/
 /*******************************/
 
-// min word length
 func LoremMinWordLength(i int) LoremConfigFunc {
 	return func(c *LoremConfig) *LoremConfig {
-		c.MinWordLength = i
+		c.minWordLength = i
 		return c
 	}
 }
 
-// max word length
 func LoremMaxWordLength(i int) LoremConfigFunc {
 	return func(c *LoremConfig) *LoremConfig {
-		c.MaxWordLength = i
+		c.maxWordLength = i
 		return c
 	}
 }
 
-// min sentence length
 func LoremMinSentenceLength(i int) LoremConfigFunc {
 	return func(c *LoremConfig) *LoremConfig {
-		c.MinSentenceLength = i
+		c.minSentenceLength = i
 		return c
 	}
 }
 
-// max sentence length
 func LoremMaxSentenceLength(i int) LoremConfigFunc {
 	return func(c *LoremConfig) *LoremConfig {
-		c.MaxSentenceLength = i
+		c.maxSentenceLength = i
 		return c
 	}
 }
 
-// min paragraph count
 func LoremMinParagraphCount(i int) LoremConfigFunc {
 	return func(c *LoremConfig) *LoremConfig {
-		c.MinParagraphs = i
+		c.minParagraphs = i
 		return c
 	}
 }
 
-// max paragraph count
 func LoremMaxParagraphCount(i int) LoremConfigFunc {
 	return func(c *LoremConfig) *LoremConfig {
-		c.MaxParagraphs = i
+		c.maxParagraphs = i
 		return c
 	}
 }
 
-// capitalize first letter of sentence
 func LoremCapitalizeFirst(b bool) LoremConfigFunc {
 	return func(c *LoremConfig) *LoremConfig {
-		c.CapitalizeFirst = b
+		c.capitalizeFirst = b
 		return c
 	}
 }
 
-// add punctuation to the end of sentences
 func LoremPunctuation(b bool) LoremConfigFunc {
 	return func(c *LoremConfig) *LoremConfig {
-		c.Punctuation = b
+		c.punctuation = b
 		return c
 	}
 }
 
-// add a character to the list of punctuation characters
 func LoremAddPunctuationChar(s string) LoremConfigFunc {
 	return func(c *LoremConfig) *LoremConfig {
-		c.PunctuationChars = append(c.PunctuationChars, s)
+		c.punctuationChars = append(c.punctuationChars, s)
 		return c
 	}
 }
 
-// remove a character from the list of punctuation characters
 func LoremRemovePunctuationChar(s string) LoremConfigFunc {
 	return func(c *LoremConfig) *LoremConfig {
-		for i, v := range c.PunctuationChars {
+		for i, v := range c.punctuationChars {
 			if v == s {
-				c.PunctuationChars = append(c.PunctuationChars[:i], c.PunctuationChars[i+1:]...)
+				c.punctuationChars = append(c.punctuationChars[:i], c.punctuationChars[i+1:]...)
 				break
 			}
 		}
@@ -203,52 +174,36 @@ func LoremRemovePunctuationChar(s string) LoremConfigFunc {
 	}
 }
 
-// replace the list of punctuation characters with the given list
 func LoremSetPunctuationChars(s []string) LoremConfigFunc {
 	return func(c *LoremConfig) *LoremConfig {
-		c.PunctuationChars = s
+		c.punctuationChars = s
 		return c
 	}
 }
 
-// add a weight to the given punctuation character - this will replace any existing weight
 func LoremAddPunctuationWeight(s string, i int) LoremConfigFunc {
 	return func(c *LoremConfig) *LoremConfig {
-		c.PunctuationWeights[s] = i
+		c.punctuationWeights[s] = i
 		return c
 	}
 }
 
-/* asserts */
-func (l *Lorem) check() {
-	// no checks yet
-	// @TODO runtime checks
-}
-
-/*********************************/
-/** END CONFIGURATION FUNCTIONS **/
-/*********************************/
-
-// Creates a new lorem with the given configuration
-// defaults will be used if no configuration is given (set via config fns)
 func NewLorem(cfg ...LoremConfigFunc) *Lorem {
 	config := defaultLoremConfig()
 	for _, fn := range cfg {
 		config = fn(config)
 	}
-	lorem := &Lorem{
-		Cfg: config,
+	return &Lorem{
+		Cfg:    config,
+		Output: "",
 	}
-	lorem.check()
-	return lorem
 }
 
-/** GENERATION FUNCTIONS **/
-
-// Main entry point for content generation. call after instantiation.
+// Generate begins the generation process and returns the generated string as well as setting
+// the Output field of the Lorem struct so it can be accessed later if needed
 func (l *Lorem) Generate() string {
 	paragraphs := ""
-	paragraphCount := RandomBetween(l.Cfg.MinParagraphs, l.Cfg.MaxParagraphs)
+	paragraphCount := RandomBetween[int](l.Cfg.minParagraphs, l.Cfg.maxParagraphs)
 	for i := 0; i < paragraphCount; i++ {
 		paragraphs += l.paragraph()
 	}
@@ -260,7 +215,7 @@ func (l *Lorem) Generate() string {
 // generates a random word defined by the configuration
 func (l *Lorem) word() string {
 	word := ""
-	wordLen := RandomBetween(l.Cfg.MinWordLength, l.Cfg.MaxWordLength)
+	wordLen := RandomBetween[int](l.Cfg.minWordLength, l.Cfg.maxWordLength)
 	for i := 0; i < wordLen; i++ {
 		word += string(RandomBetween[rune](lower_alpha_start, lower_alpha_end))
 	}
@@ -270,19 +225,19 @@ func (l *Lorem) word() string {
 // generates a random sentence defined by the configuration
 func (l *Lorem) sentence() string {
 	sentence := ""
-	wordCount := RandomBetween[int](l.Cfg.MinSentenceLength, l.Cfg.MaxSentenceLength)
+	wordCount := RandomBetween[int](l.Cfg.minSentenceLength, l.Cfg.maxSentenceLength)
 	for i := 0; i < wordCount; i++ {
 		if i > 0 {
 			sentence += string(special_chars["SPACE"])
 		}
 		sentence += l.word()
 	}
-	if l.Cfg.CapitalizeFirst && len(sentence) > 0 {
+	if l.Cfg.capitalizeFirst && len(sentence) > 0 {
 		fl := rune(sentence[0])
 		sentence = string(fl-upper_to_lower_offset_mask) + sentence[1:]
 	}
-	if l.Cfg.Punctuation && len(sentence) > 0 {
-		sentence += l.punctuation()
+	if l.Cfg.punctuation && len(sentence) > 0 {
+		sentence += RandomWeightedFromMap[string](l.Cfg.punctuationWeights)
 	}
 	return sentence
 }
@@ -290,35 +245,196 @@ func (l *Lorem) sentence() string {
 // generates a random paragraph defined by the configuration
 func (l *Lorem) paragraph() string {
 	paragraph := string(special_chars["SPACE"]) + string(special_chars["SPACE"])
-	sentenceCount := RandomBetween(l.Cfg.MinParagraphLength, l.Cfg.MaxParagraphLength)
+	sentenceCount := RandomBetween[int](l.Cfg.minParagraphLength, l.Cfg.maxParagraphLength)
 	for i := 0; i < sentenceCount; i++ {
 		paragraph = paragraph + string(special_chars["SPACE"]) + l.sentence()
 	}
 	return paragraph + string(special_chars["CRLF"]) + string(special_chars["CRLF"])
 }
 
-// grabs a weighted punctuation character from the configuration
-func (l *Lorem) punctuation() string {
-	var cumulativeWeights []int
-	var characters []string
-	cumulative := 0
+/*******************/
+/* SLUG GENERATION */
+/*******************/
 
-	for char, weight := range l.Cfg.PunctuationWeights {
-		cumulative += weight
-		cumulativeWeights = append(cumulativeWeights, cumulative)
-		characters = append(characters, char)
-	}
+var (
+	identity_slug_charset string = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-"
+	thread_slug_charset   string = "abcdefghijklmnopqrstuvwxyz0123456789-"
 
-	r := rand.Intn(cumulativeWeights[len(cumulativeWeights)-1])
+	identity_slug_min_length int = 8
+	identity_slug_max_length int = 10
+	thread_slug_min_length   int = 12
+	thread_slug_max_length   int = 16
+)
 
-	for i, weight := range cumulativeWeights {
-		if r < weight {
-			return characters[i]
-		}
-	}
-
-	return string(special_chars["PERIOD"])
+func slug(charset string, min, max int) string {
+	sluglen := RandomBetween[int](min, max)
+	slug, _ := gonanoid.Generate(charset, sluglen)
+	return slug
 }
+
+func NewIdentitySlug() string {
+	return slug(identity_slug_charset, identity_slug_min_length, identity_slug_max_length)
+}
+
+func NewThreadSlug() string {
+	return slug(thread_slug_charset, thread_slug_min_length, thread_slug_max_length)
+}
+
+/*************************/
+/* NAME/EMAIL GENERATION */
+/*************************/
+
+var (
+	username_min_length int = 4
+	username_max_length int = 20
+	// email_min_length    int = 10
+	// email_max_length    int = 26
+
+	email_domain_weights = map[string]int{
+		"gmail.com":      100,
+		"yahoo.com":      75,
+		"hotmail.com":    60,
+		"outlook.com":    20,
+		"protonmail.com": 10,
+		"live.com":       50,
+		"icloud.com":     35,
+		"fastmail.org":   5,
+		"harvard.edu":    2,
+		"mit.edu":        3,
+		"stanford.edu":   5,
+		"princeton.edu":  2,
+		"yale.edu":       2,
+		"berkeley.edu":   2,
+		"ucla.edu":       4,
+		"usc.edu":        4,
+		"nyu.edu":        6,
+		"cornell.edu":    4,
+		"brown.edu":      5,
+		"fbi.gov":        4,
+		"cia.gov":        1,
+		"nsa.gov":        1,
+		"usps.gov":       1,
+		"irs.gov":        1,
+	}
+
+	uword_step_weights = map[int]int{
+		1: 90, // add a lettr to the end
+		2: 20, // add a letter to the end and capitalize it
+		3: 4,  // add a number to the end
+		4: 2,  // add a special character to the end
+	}
+)
+
+func safeRandomSpecialChar() rune {
+	return safe_special_chars[RandomBetween[int](0, len(safe_special_chars))]
+}
+
+func uwordStep(current string) string {
+	step := RandomWeightedFromMap[int](uword_step_weights)
+	word := current
+
+	switch step {
+	case 1:
+		word += string(RandomBetween[rune](lower_alpha_start, lower_alpha_end))
+	case 2:
+		word += string(RandomBetween[rune](lower_alpha_start-upper_to_lower_offset_mask, lower_alpha_end-upper_to_lower_offset_mask))
+	case 3:
+		word += strconv.Itoa(RandomBetween[int](0, 9))
+	case 4:
+		word += string(safeRandomSpecialChar())
+	}
+	return word
+}
+
+func AddDomainSuffix(u string) string {
+	return u + "@" + RandomWeightedFromMap[string](email_domain_weights)
+}
+
+func NewUsername() string {
+	usernameLen := RandomBetween[int](username_min_length, username_max_length)
+	username := ""
+	for i := 0; i < usernameLen; i++ {
+		username = uwordStep(username)
+	}
+	return username
+}
+
+/******************/
+/* ENUM RESOLVERS */
+/******************/
+
+var (
+	enum_account_role_weights = map[Enum]int{
+		AccountRoleUser:      90,
+		AccountRoleModerator: 5,
+		AccountRoleAdmin:     2,
+	}
+
+	enum_account_status_weights = map[Enum]int{
+		AccountStatusActive:    90,
+		AccountStatusInactive:  10,
+		AccountStatusSuspended: 10,
+		AccountStatusBanned:    5,
+	}
+
+	enum_article_status_weights = map[Enum]int{
+		ArticleStatusDraft:     20,
+		ArticleStatusReview:    5,
+		ArticleStatusPublished: 90,
+		ArticleStatusArchived:  10,
+		ArticleStatusRetracted: 2,
+	}
+
+	enum_thread_status_weights = map[Enum]int{
+		ThreadStatusOpen:     90,
+		ThreadStatusClosed:   5,
+		ThreadStatusArchived: 10,
+		ThreadStatusRemoved:  2,
+	}
+
+	enum_thread_role_weights = map[Enum]int{
+		ThreadRoleUser:      90,
+		ThreadRoleModerator: 5,
+	}
+
+	enum_identity_status_weights = map[Enum]int{
+		IdentityStatusActive:    90,
+		IdentityStatusInactive:  15,
+		IdentityStatusSuspended: 6,
+		IdentityStatusBanned:    2,
+	}
+)
+
+func RandomEnumAccountRole() AccountRole {
+	return RandomWeightedFromMap[Enum](enum_account_role_weights).(AccountRole)
+}
+
+func RandomEnumAccountStatus() AccountStatus {
+	return RandomWeightedFromMap[Enum](enum_account_status_weights).(AccountStatus)
+}
+
+func RandomEnumArticleStatus() ArticleStatus {
+	return RandomWeightedFromMap[Enum](enum_article_status_weights).(ArticleStatus)
+}
+
+func RandomEnumThreadStatus() ThreadStatus {
+	return RandomWeightedFromMap[Enum](enum_thread_status_weights).(ThreadStatus)
+}
+
+func RandomEnumThreadRole() ThreadRole {
+	return RandomWeightedFromMap[Enum](enum_thread_role_weights).(ThreadRole)
+}
+
+func RandomEnumIdentityStatus() IdentityStatus {
+	return RandomWeightedFromMap[Enum](enum_identity_status_weights).(IdentityStatus)
+}
+
+func RandomEnumIdentityStyle() IdentityStyle {
+	return IdentityStyleID[RandomBetween[int](1, len(IdentityStyleID))]
+}
+
+/*************************************************************************************************************/
+/*************************************************************************************************************/
 
 // wraps the content with the given tag as an html tag
 func WrapHTMLTag(tag, content string) string {

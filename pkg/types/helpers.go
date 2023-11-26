@@ -20,6 +20,28 @@ func HrPrint(str string) {
 	fmt.Printf(HrSplit + "\n")
 }
 
-func GenerateAccount() *Account {
-	return &Account{}
+// returns a random weighted item from the given map
+// the map should be of the form map[T]int where T is the type of item and int is the weight
+// if for some reason a random item cannot be chosen, the first item in the map is returned
+// this is why the map should never be empty
+func RandomWeightedFromMap[T comparable](weights map[T]int) T {
+	var cumulativeWeights []int
+	var list []T
+	cumulative := 0
+
+	for item, weight := range weights {
+		cumulative += weight
+		cumulativeWeights = append(cumulativeWeights, cumulative)
+		list = append(list, item)
+	}
+
+	r := rand.Intn(cumulativeWeights[len(cumulativeWeights)-1])
+
+	for i, weight := range cumulativeWeights {
+		if r < weight {
+			return list[i]
+		}
+	}
+
+	return list[0]
 }

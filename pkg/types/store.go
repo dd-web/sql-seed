@@ -7,48 +7,123 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// postgres connection string format
-// used to create a connection string for connecting to postgres
-var sql_conn_fmt string = "user=%s password=%s dbname=%s host=%s port=%s sslmode=%s"
+var seeder_debug_enabled = false
 
-// debug mode for printing sql results
-var debug_mode = false
+/******************************/
+/* POSTGRES CONFIG / DEFAULTS */
+/******************************/
 
-// postgres connection config object
-type PGConfig struct {
-	User     string
-	Password string
-	Name     string
-	Host     string
-	Port     string
-	SSL      string
+var (
+	pg_default_connfmt string = "user=%s password=%s dbname=%s host=%s port=%s sslmode=%s"
+	pg_default_user    string = "postgres"
+	pg_default_pass    string = "admin"
+	pg_default_dbname  string = "local_db_test"
+	pg_default_host    string = "david.local"
+	pg_default_port    string = "5432"
+	pg_default_ssl     string = "disable"
+)
+
+type pgConfigFunc func(*pgConfig) *pgConfig
+
+type pgConfig struct {
+	connfmt  string
+	user     string
+	password string
+	name     string
+	host     string
+	port     string
+	ssl      string
 }
 
-// NewPGConfig creates a new PGConfig object
-func NewPGConfig(user, pass, name, host, port, ssl string) *PGConfig {
-	return &PGConfig{
-		User:     user,
-		Password: pass,
-		Name:     name,
-		Host:     host,
-		Port:     port,
-		SSL:      ssl,
+func defaultPGConfig() *pgConfig {
+	return &pgConfig{
+		connfmt:  pg_default_connfmt,
+		user:     pg_default_user,
+		password: pg_default_pass,
+		name:     pg_default_dbname,
+		host:     pg_default_host,
+		port:     pg_default_port,
+		ssl:      pg_default_ssl,
 	}
 }
 
-// ConnectionString returns a formatted string for connecting to postgres
-func (pgc *PGConfig) ConnectionString() string {
-	return fmt.Sprintf(sql_conn_fmt, pgc.User, pgc.Password, pgc.Name, pgc.Host, pgc.Port, pgc.SSL)
+/*******************************/
+/*** CONFIGURATION FUNCTIONS ***/
+/*******************************/
+
+func PGCfgSetUser(s string) pgConfigFunc {
+	return func(c *pgConfig) *pgConfig {
+		c.user = s
+		return c
+	}
 }
 
-// Store holds a connection to the database
+func PGCfgSetPass(s string) pgConfigFunc {
+	return func(c *pgConfig) *pgConfig {
+		c.password = s
+		return c
+	}
+}
+
+func PGCfgSetDBName(s string) pgConfigFunc {
+	return func(c *pgConfig) *pgConfig {
+		c.name = s
+		return c
+	}
+}
+
+func PGCfgSetHost(s string) pgConfigFunc {
+	return func(c *pgConfig) *pgConfig {
+		c.host = s
+		return c
+	}
+}
+
+func PGCfgSetPort(s string) pgConfigFunc {
+	return func(c *pgConfig) *pgConfig {
+		c.port = s
+		return c
+	}
+}
+
+func PGCfgSetSSL(s string) pgConfigFunc {
+	return func(c *pgConfig) *pgConfig {
+		c.ssl = s
+		return c
+	}
+}
+
+func PGCfgSetConnFmt(s string) pgConfigFunc {
+	return func(c *pgConfig) *pgConfig {
+		c.connfmt = s
+		return c
+	}
+}
+
+func newPGConfig(cfg ...pgConfigFunc) *pgConfig {
+	config := defaultPGConfig()
+	for _, fn := range cfg {
+		config = fn(config)
+	}
+	return config
+}
+
+func (pgc *pgConfig) connstr() string {
+	return fmt.Sprintf(pgc.connfmt, pgc.user, pgc.password, pgc.name, pgc.host, pgc.port, pgc.ssl)
+}
+
+/*********/
+/* STORE */
+/*********/
+
 type Store struct {
-	DB *sql.DB
+	DB  *sql.DB
+	cfg *pgConfig
 }
 
-// creates a new store object with a connection to the database
-func NewStore(pgc *PGConfig) (*Store, error) {
-	db, err := sql.Open("postgres", pgc.ConnectionString())
+func NewStore(cfg ...pgConfigFunc) (*Store, error) {
+	pgcfg := newPGConfig(cfg...)
+	db, err := sql.Open("postgres", pgcfg.connstr())
 	if err != nil {
 		return nil, err
 	}
@@ -57,17 +132,19 @@ func NewStore(pgc *PGConfig) (*Store, error) {
 		return nil, fmt.Errorf("could not ping database: %v", err)
 	}
 
-	return &Store{DB: db}, nil
+	return &Store{
+		DB:  db,
+		cfg: pgcfg,
+	}, nil
 }
 
-// execute raw sql query
 func (s *Store) Execute(query string) error {
 	res, err := s.DB.Exec(query)
 	if err != nil {
 		return err
 	}
 
-	if debug_mode {
+	if seeder_debug_enabled {
 		fmt.Printf("[SQL RESULT]: %+v\n", res)
 	}
 	return nil
@@ -94,14 +171,17 @@ func (s *Store) SeedThread(account_id int) error {
 	content := para.Generate()
 	fmt.Println(content)
 
-	identity := &Identity{
-		AccountID: account_id,
-		RoleID:    3,                // 3 for creator
-		StyleID:   1,                // 1 for default
-		Name:      "X7DmfZF9ddzggj", // random string for alias
-	}
-	str := identity.Insert()
-	fmt.Println(str)
+	seeder := NewSeeder(s)
+	seeder.SeedAccounts()
+
+	// identity := &Identity{
+	// 	AccountID: account_id,
+	// 	RoleID:    3,                // 3 for creator
+	// 	StyleID:   1,                // 1 for default
+	// 	Name:      "X7DmfZF9ddzggj", // random string for alias
+	// }
+	// str := identity.Insert()
+	// fmt.Println(str)
 	// create identity for account
 
 	// create thread_content
