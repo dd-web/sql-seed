@@ -95,6 +95,7 @@ func parseMigrationDir(path string) (map[int]*Migration, error) {
 // parse migrations directory and return a map of migrations that can be executed
 // migrations are sorted by their index in ascending order, which is the order they should be executed in
 // migrations include both the up and down sql scripts in bytes (should be converted to string before execution)
+// as well as a defered filed called transatory.sql which is ran after seeding is complete
 func Migrations(path string) (map[int]*Migration, error) {
 	return parseMigrationDir(path)
 }

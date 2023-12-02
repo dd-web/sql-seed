@@ -5,172 +5,13 @@
 package types
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"time"
+
+	"github.com/lib/pq"
 )
-
-/***************/
-/* TABLE TYPES */
-/***************/
-type Table interface{}
-
-type TableAccount struct {
-	ID int `json:"id"` // PK serial
-
-	Username string `json:"username"`
-	Email    string `json:"email"`
-
-	RoleID   int `json:"role_id"`   // FK ref account_roles.id
-	StatusID int `json:"status_id"` // FK ref account_statuses.id
-
-	CreatedAt *time.Time `json:"created_at"`
-	UpdatedAt *time.Time `json:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
-}
-
-type TableArticle struct {
-	ID int `json:"id"` // PK serial
-
-	AuthorID  int `json:"author_id"`  // FK ref accounts.id
-	StatusID  int `json:"status_id"`  // FK ref article_statuses.id
-	ContentID int `json:"content_id"` // FK ref article_contents.id
-
-	Title string `json:"title"`
-	Slug  string `json:"slug"`
-
-	CreatedAt *time.Time `json:"created_at"`
-	UpdatedAt *time.Time `json:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
-}
-
-type TableBoard struct {
-	ID int `json:"id"` // PK serial
-
-	Title string `json:"title"`
-	Short string `json:"short"`
-
-	Description string `json:"description"`
-	PostCount   int    `json:"post_count"`
-
-	CreatedAt *time.Time `json:"created_at"`
-	UpdatedAt *time.Time `json:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
-}
-
-type TableThread struct {
-	ID int `json:"id"` // PK serial
-
-	Title string `json:"title"`
-	Slug  string `json:"slug"`
-
-	StatusID  int `json:"status_id"`  // FK ref thread_statuses.id
-	BoardID   int `json:"board_id"`   // FK ref boards.id
-	CreatorID int `json:"creator_id"` // FK ref identities.id
-	ContentID int `json:"content_id"` // FK ref thread_contents.id
-
-	CreatedAt *time.Time `json:"created_at"`
-	UpdatedAt *time.Time `json:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
-}
-
-type TablePost struct {
-	ID int `json:"id"` // PK serial
-
-	PostNumber int `json:"post_number"`
-
-	CreatorID int `json:"creator_id"` // FK ref identities.id
-	ThreadID  int `json:"thread_id"`  // FK ref threads.id
-	BoardID   int `json:"board_id"`   // FK ref boards.id
-	ContentID int `json:"content_id"` // FK ref post_contents.id
-
-	CreatedAt *time.Time `json:"created_at"`
-	UpdatedAt *time.Time `json:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
-}
-
-type TableIdentity struct {
-	ID int `json:"id"` // PK serial
-
-	AccountID int `json:"account_id"` // FK ref accounts.id
-	RoleID    int `json:"role_id"`    // FK ref thread_roles.id
-	StyleID   int `json:"style_id"`   // FK ref identity_styles.id
-	StatusID  int `json:"status_id"`  // FK ref identity_statuses.id
-
-	Name string `json:"name"` // name of the identity, limited to 31 characters. not null.
-
-	CreatedAt *time.Time `json:"created_at"`
-	UpdatedAt *time.Time `json:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
-}
-
-type TableThreadIdentity struct {
-	ID int `json:"id"` // PK serial
-
-	ThreadID   int `json:"thread_id"`   // FK ref threads.id
-	IdentityID int `json:"identity_id"` // FK ref identities.id
-	AccountID  int `json:"account_id"`  // FK ref accounts.id
-}
-
-type TableArticleContent struct {
-	ID      int    `json:"id"`      // PK serial
-	Content string `json:"content"` // TEXT field
-}
-
-type TableThreadContent struct {
-	ID      int    `json:"id"`      // PK serial
-	Content string `json:"content"` // TEXT field
-}
-
-type TablePostContent struct {
-	ID      int    `json:"id"`      // PK serial
-	Content string `json:"content"` // TEXT field
-}
-
-type TableThreadMod struct {
-	ID         int `json:"id"`          // PK serial
-	ThreadID   int `json:"thread_id"`   // FK ref threads.id
-	IdentityID int `json:"identity_id"` // FK ref identities.id
-}
-
-type TableAccountRole struct {
-	ID   int         `json:"id"` // PK serial
-	Role AccountRole `json:"role"`
-}
-
-type TableAccountStatus struct {
-	ID     int           `json:"id"` // PK serial
-	Status AccountStatus `json:"status"`
-}
-
-type TableArticleStatus struct {
-	ID     int           `json:"id"` // PK serial
-	Status ArticleStatus `json:"status"`
-}
-
-type TableThreadStatus struct {
-	ID     int          `json:"id"` // PK serial
-	Status ThreadStatus `json:"status"`
-}
-
-type TableThreadRole struct {
-	ID   int        `json:"id"` // PK serial
-	Role ThreadRole `json:"role"`
-}
-
-type TableIdentityStatus struct {
-	ID     int            `json:"id"` // PK serial
-	Status IdentityStatus `json:"status"`
-}
-
-type TableIdentityStyle struct {
-	ID    int           `json:"id"` // PK serial
-	Style IdentityStyle `json:"style"`
-}
-
-/**************/
-/* ENUM TYPES */
-/**************/
 
 type Enum interface {
 	String() string
@@ -613,6 +454,18 @@ func defaultSeederConfig() *SeederConfig {
 	}
 }
 
+func defaultSeeder() *Seeder {
+	return &Seeder{
+		Accounts:       []*Account{},
+		Boards:         []*Board{},
+		Articles:       []*Article{},
+		ArticleContent: []*ArticleContent{},
+		Threads:        map[string][]*Thread{},
+		Admins:         []*Account{},
+		Mods:           []*Account{},
+	}
+}
+
 type Seeder struct {
 	Store *Store
 	Cfg   *SeederConfig
@@ -620,80 +473,120 @@ type Seeder struct {
 	Accounts []*Account
 	Boards   []*Board
 
+	Articles       []*Article
+	ArticleContent []*ArticleContent
+
+	Threads map[string][]*Thread
+
 	Admins []*Account
 	Mods   []*Account
 }
 
 func NewSeeder(s *Store, cfg ...SeederConfigFunc) *Seeder {
+	seeder := defaultSeeder()
 	config := defaultSeederConfig()
 	for _, f := range cfg {
 		config = f(config)
 	}
-	return &Seeder{
-		Store: s,
-		Cfg:   config,
+	seeder.Cfg = config
+	seeder.Store = s
+	return seeder
+}
 
-		Accounts: []*Account{},
-		Boards:   []*Board{},
+func (s *Seeder) PrintResults() {
+	fmt.Print(UnderlinePrint("Results"))
+	fmt.Printf("  - %v Accounts\n", len(s.Accounts))
+	fmt.Printf("    - %v Admins\n", len(s.Admins))
+	fmt.Printf("    - %v Moderators\n", len(s.Mods))
+	fmt.Printf("    - %v Users\n", len(s.Accounts)-(len(s.Admins)+len(s.Mods)))
+	fmt.Printf("  - %v Articles\n", len(s.Articles))
+	fmt.Printf("  - %v Boards\n", len(s.Boards))
+}
 
-		Admins: []*Account{},
-		Mods:   []*Account{},
+type InsertService string
+
+const (
+	StatementExecError     InsertService = "statement execution"
+	StatementClosureError  InsertService = "statement closure"
+	TransactionCommitError InsertService = "transaction commit"
+)
+
+type SeedDBError struct {
+	Model   string
+	Service InsertService
+	Message string
+}
+
+func (e SeedDBError) Error() string {
+	return fmt.Sprintf("%s failure durring %s insert: %s", e.Service, e.Model, e.Message)
+}
+
+func finalizeTransaction(mod string, tx *sql.Tx, stmt *sql.Stmt) *SeedDBError {
+	err := stmt.Close()
+	if err != nil {
+		return &SeedDBError{Model: mod, Service: StatementClosureError, Message: err.Error()}
 	}
+
+	err = tx.Commit()
+	if err != nil {
+		return &SeedDBError{Model: mod, Service: TransactionCommitError, Message: err.Error()}
+	}
+
+	return nil
 }
 
 func (s *Seeder) Seed() {
-	s.SeedAccounts()
-	s.SeedBoards()
+	/* Generation */
+	s.seedAccounts()
+	s.seedBoards()
+	s.seedArticles()
 
-	// for _, a := range s.Accounts {
-	// 	fmt.Printf("%+v\n\n", a)
-	// }
+	/* Insert */
+	err := s.insertAccounts()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	s.insertAccounts()
+	err = s.insertBoards()
+	if err != nil {
+		log.Fatal(err)
+	}
 
+	err = s.insertArticleContent()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = s.insertArticles()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 /* ACCOUNT */
+/***********/
 
 type Account struct {
-	ID int `json:"id"`
+	ID int
 
-	Username string `json:"username"`
-	Email    string `json:"email"`
+	Username string
+	Email    string
 
 	Role   AccountRole
 	Status AccountStatus
 
-	CreatedAt *time.Time `json:"created_at"`
-	UpdatedAt *time.Time `json:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
-
-	SqlInsertString func() string
-}
-
-func (a *Account) insertString() string {
-	return "(" +
-		fmt.Sprint(a.ID) + ", " +
-		"'" + a.Username + "', " +
-		"'" + a.Email + "', " +
-		fmt.Sprint(a.Status.ID()) + ", " +
-		fmt.Sprint(a.Role.ID()) + ")"
+	CreatedAt *time.Time
+	UpdatedAt *time.Time
+	DeletedAt *time.Time
 }
 
 func newAccount(id int) *Account {
-	ts := time.Now().UTC()
+	ts := time.Now()
 	return &Account{
 		ID:        id,
 		CreatedAt: &ts,
 		UpdatedAt: &ts,
 	}
-}
-
-func (a *Account) randomize() {
-	a.Role = RandomEnumAccountRole()
-	a.Status = RandomEnumAccountStatus()
-	a.Username = NewUsername()
-	a.Email = AddDomainSuffix(a.Username)
 }
 
 func (a *Account) track(s *Seeder) {
@@ -704,10 +597,11 @@ func (a *Account) track(s *Seeder) {
 		s.Mods = append(s.Mods, a)
 	}
 	s.Accounts = append(s.Accounts, a)
+	ts := time.Now()
+	a.UpdatedAt = &ts
 }
 
-// Entry
-func (s *Seeder) SeedAccounts() {
+func (s *Seeder) seedAccounts() {
 	num := RandomBetween(s.Cfg.minAccountCount, s.Cfg.maxAccountCount)
 	var sum int = 0
 
@@ -724,92 +618,221 @@ func (s *Seeder) SeedAccounts() {
 	for i := 0; i < num; i++ {
 		sum++
 		a := newAccount(sum)
-		a.randomize()
+		a.Role = RandomEnumAccountRole()
+		a.Status = RandomEnumAccountStatus()
+		a.Username = NewUsername()
+		a.Email = AddDomainSuffix(a.Username)
 		a.track(s)
 	}
 }
 
-func (s *Seeder) insertAccounts() {
-	var q string = `INSERT INTO accounts (id, username, email, status_id, role_id) VALUES `
+func (s *Seeder) insertAccounts() *SeedDBError {
+	tx, _ := s.Store.DB.Begin()
+	stmt, _ := tx.Prepare(pq.CopyIn("accounts", "id", "username", "email", "status_id", "role_id"))
 
-	for _, a := range s.Accounts {
-		q += a.insertString() + ", "
+	for _, act := range s.Accounts {
+		_, err := stmt.Exec(act.ID, act.Username, act.Email, act.Status.ID(), act.Role.ID())
+		if err != nil {
+			return &SeedDBError{Model: "Account", Service: StatementExecError, Message: err.Error()}
+		}
 	}
 
-	q = q[:len(q)-2] + ";"
-
-	// fmt.Println("Insert string:\n\n", q, "\n\n")
-	err := s.Store.Execute(q)
-	if err != nil {
-		log.Fatal("Account Insertion Error:", err.Error())
-	}
-
+	return finalizeTransaction("Account", tx, stmt)
 }
 
 /* BOARD */
+/*********/
 
 type Board struct {
-	ID    int    `json:"id"`
-	Title string `json:"title"`
-	Short string `json:"short"`
-	Desc  string `json:"description"`
+	ID    int
+	Title string
+	Short string
+	Desc  string
 
-	CreatedAt *time.Time `json:"created_at"`
-	UpdatedAt *time.Time `json:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	PostCount int
+	Threads   []*Thread
+
+	CreatedAt *time.Time
+	UpdatedAt *time.Time
+	DeletedAt *time.Time
 }
 
-func newBoard() *Board {
+func (b *Board) track(s *Seeder) {
+	s.Boards = append(s.Boards, b)
+	s.Threads[b.Short] = []*Thread{}
+}
+
+func newBoard(id int) *Board {
 	ts := time.Now().UTC()
 	return &Board{
+		ID:        id,
+		PostCount: 1,
 		CreatedAt: &ts,
 		UpdatedAt: &ts,
 	}
 }
 
-func (s *Seeder) SeedBoards() {
+func (s *Seeder) seedBoards() {
 	for i, board := range default_boards {
-		b := newBoard()
-		b.ID = i + 1
+		b := newBoard(i + 1)
 		b.Title = board[0]
 		b.Short = board[1]
 		b.Desc = board[2]
-		s.Boards = append(s.Boards, b)
+		b.track(s)
 	}
 }
 
-/* ARTICLE */
+func (s *Seeder) insertBoards() *SeedDBError {
+	tx, _ := s.Store.DB.Begin()
+	stmt, _ := tx.Prepare(pq.CopyIn("boards", "id", "title", "short", "description", "post_count"))
+
+	for _, board := range s.Boards {
+		_, err := stmt.Exec(board.ID, board.Title, board.Short, board.Desc, board.PostCount)
+		if err != nil {
+			return &SeedDBError{Model: "Board", Service: StatementExecError, Message: err.Error()}
+		}
+	}
+
+	return finalizeTransaction("Board", tx, stmt)
+}
+
+/* ARTICLE & ARTICLE CONTENT */
+/*****************************/
 
 type Article struct {
-	ID    int    `json:"id"`
-	Title string `json:"title"`
-	Slug  string `json:"slug"`
+	ID    int
+	Title string
+	Slug  string
 
 	Status  ArticleStatus
 	Author  *Account
-	Content string
+	Content *ArticleContent
 
-	CreatedAt *time.Time `json:"created_at"`
-	UpdatedAt *time.Time `json:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	CreatedAt *time.Time
+	UpdatedAt *time.Time
+	DeletedAt *time.Time
 }
 
-func newArticle() *Article {
+type ArticleContent struct {
+	ID      int
+	Content string
+}
+
+func newArticle(id int) *Article {
 	ts := time.Now().UTC()
 	return &Article{
+		ID:        id,
 		CreatedAt: &ts,
 		UpdatedAt: &ts,
 	}
 }
 
-func (a *Article) randomize() {
-	ts := time.Now().UTC()
-	para := NewLorem()
-	a.Content = para.Generate()
-	a.Title = para.GenerateSentence()
-	a.Status = RandomEnumArticleStatus()
-	a.Slug = NewArticleSlug()
-	a.UpdatedAt = &ts
+func newArticleContent(id int) *ArticleContent {
+	lorem := NewLorem()
+	ac := &ArticleContent{
+		ID:      id,
+		Content: lorem.Generate(),
+	}
+	return ac
 }
 
-type SQLStringBuilderFunc func()
+func (a *Article) track(s *Seeder) {
+	s.Articles = append(s.Articles, a)
+}
+
+func (ac *ArticleContent) track(s *Seeder) {
+	s.ArticleContent = append(s.ArticleContent, ac)
+}
+
+func (s *Seeder) seedArticles() {
+	num := RandomBetween(s.Cfg.minArticleCount, s.Cfg.maxArticleCount)
+	loremTitle := NewLorem(LoremPunctuation(false), LoremMaxSentenceLength(10))
+
+	for i := 0; i < num; i++ {
+		ts := time.Now().UTC()
+
+		a := newArticle(i + 1)
+		ac := newArticleContent(i + 1)
+
+		a.Title = loremTitle.GenerateSentence()
+		a.Author = RandomFromList[*Account](s.Admins)
+		a.Status = RandomEnumArticleStatus()
+		a.Slug = NewArticleSlug()
+
+		a.CreatedAt = &ts
+		a.UpdatedAt = &ts
+
+		a.Content = ac
+
+		ac.track(s)
+		a.track(s)
+	}
+}
+
+func (s *Seeder) insertArticleContent() *SeedDBError {
+	tx, _ := s.Store.DB.Begin()
+	stmt, _ := tx.Prepare(pq.CopyIn("article_contents", "id", "content"))
+
+	for _, ac := range s.ArticleContent {
+		_, err := stmt.Exec(ac.ID, ac.Content)
+		if err != nil {
+			return &SeedDBError{Model: "ArticleContent", Service: StatementExecError, Message: err.Error()}
+		}
+	}
+
+	return finalizeTransaction("ArticleContent", tx, stmt)
+}
+
+func (s *Seeder) insertArticles() *SeedDBError {
+	tx, _ := s.Store.DB.Begin()
+	stmt, _ := tx.Prepare(pq.CopyIn("articles", "id", "title", "slug", "content_id", "status_id", "author_id"))
+
+	for _, a := range s.Articles {
+		_, err := stmt.Exec(a.ID, a.Title, a.Slug, a.Content.ID, a.Status.ID(), a.Author.ID)
+		if err != nil {
+			return &SeedDBError{Model: "Article", Service: StatementExecError, Message: err.Error()}
+		}
+	}
+	return finalizeTransaction("Article", tx, stmt)
+}
+
+/* THREAD & THREAD CONTENTS */
+/****************************/
+
+type Thread struct {
+	ID      int
+	Status  ThreadStatus
+	BoardID int
+	Content *ThreadContent
+
+	Title string
+	Slug  string
+
+	CreatedAt *time.Time
+	UpdatedAt *time.Time
+	DeletedAt *time.Time
+}
+
+type ThreadContent struct {
+	ID      int
+	Content string
+}
+
+/* POST & POST CONTENT */
+/***********************/
+
+type Post struct {
+	ID int
+
+	Board   *Board
+	Thread  *Thread
+	Account *Account
+	Content *PostContent
+
+	PostNumber int
+}
+
+type PostContent struct {
+	ID      int
+	Content string
+}

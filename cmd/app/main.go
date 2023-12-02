@@ -14,8 +14,6 @@ var (
 	migration_rollback = true
 
 	defered_migrations = map[int][]byte{}
-
-	result_account_verbose_prefix = "    - "
 )
 
 func main() {
@@ -37,9 +35,7 @@ func main() {
 	fmt.Println("Finishing up...")
 	finalize(store)
 
-	// fmt.Printf("\nResults"+"\n-------\n"+"  * %v Accounts\n    * %v Admins\n    * %v Moderators\n    * %v Users\n", len(seeder.Accounts), len(seeder.Admins), len(seeder.Mods), len(seeder.Accounts)-(len(seeder.Admins)+len(seeder.Mods)))
-	fmt.Printf(types.UnderlinePrint("Results")+"  * %v Accounts\n    * %v Admins\n    * %v Moderators\n    * %v Users\n", len(seeder.Accounts), len(seeder.Admins), len(seeder.Mods), len(seeder.Accounts)-(len(seeder.Admins)+len(seeder.Mods)))
-
+	seeder.PrintResults()
 }
 
 // runs migrations according to the configurations set above at the top of this file

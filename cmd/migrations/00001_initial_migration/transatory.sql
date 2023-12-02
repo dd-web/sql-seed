@@ -1,8 +1,87 @@
--- SQL to run after the seed is finished. up will run before.
-
+-- account id primary key update
 ALTER TABLE accounts
-  ALTER id SET NOT NULL,
-  ALTER id ADD GENERATED ALWAYS AS IDENTITY (START WITH 1);
+  ALTER id ADD GENERATED ALWAYS AS IDENTITY (START WITH 1),
+	ADD PRIMARY KEY (id);
 
 SELECT setval(pg_get_serial_sequence('accounts', 'id'),
   (SELECT MAX(id) FROM accounts));
+
+
+-- board id primary key update
+ALTER TABLE boards
+	ALTER id ADD GENERATED ALWAYS AS IDENTITY (START WITH 1),
+	ADD PRIMARY KEY (id);
+
+SELECT setval(pg_get_serial_sequence('boards', 'id'),
+	(SELECT MAX(id) FROM boards));
+
+
+-- article contents id primary key update
+ALTER TABLE article_contents
+	ALTER id ADD GENERATED ALWAYS AS IDENTITY (START WITH 1),
+	ADD PRIMARY KEY (id);
+
+SELECT setval(pg_get_serial_sequence('article_contents', 'id'),
+	(SELECT MAX(id) FROM article_contents));
+
+
+-- article id primary key update
+ALTER TABLE articles
+	ALTER id ADD GENERATED ALWAYS AS IDENTITY (START WITH 1),
+	ADD PRIMARY KEY (id),
+	ADD FOREIGN KEY (author_id) REFERENCES accounts (id),
+	ADD FOREIGN KEY (content_id) REFERENCES article_contents (id);
+
+SELECT setval(pg_get_serial_sequence('articles', 'id'),
+	(SELECT MAX(id) FROM articles));
+
+
+-- thread contents id primary key update
+ALTER TABLE thread_contents
+	ALTER id ADD GENERATED ALWAYS AS IDENTITY (START WITH 1),
+	ADD PRIMARY KEY (id);
+
+SELECT setval(pg_get_serial_sequence('thread_contents', 'id'),
+	(SELECT MAX(id) FROM thread_contents));
+
+
+-- thread id primary key update
+ALTER TABLE threads
+	ALTER id ADD GENERATED ALWAYS AS IDENTITY (START WITH 1),
+	ADD PRIMARY KEY (id),
+	ADD FOREIGN KEY (content_id) REFERENCES thread_contents (id),
+	ADD FOREIGN KEY (board_id) REFERENCES boards (id);
+
+SELECT setval(pg_get_serial_sequence('threads', 'id'),
+	(SELECT MAX(id) FROM threads));
+
+
+-- -- identity id primary key update
+ALTER TABLE identities
+	ADD FOREIGN KEY (thread_id) REFERENCES threads (id),
+	ADD FOREIGN KEY (account_id) REFERENCES accounts (id),
+	ADD PRIMARY KEY (thread_id, account_id);
+
+
+-- post contents id primary key update
+ALTER TABLE post_contents
+	ALTER id ADD GENERATED ALWAYS AS IDENTITY (START WITH 1),
+	ADD PRIMARY KEY (id);
+
+SELECT setval(pg_get_serial_sequence('post_contents', 'id'),
+	(SELECT MAX(id) FROM post_contents));
+
+
+-- post id primary key update
+ALTER TABLE posts
+	ALTER id ADD GENERATED ALWAYS AS IDENTITY (START WITH 1),
+	ADD PRIMARY KEY (id),
+	ADD FOREIGN KEY (board_id) REFERENCES boards (id),
+	ADD FOREIGN KEY (thread_id) REFERENCES threads (id),
+	ADD FOREIGN KEY (content_id) REFERENCES post_contents (id),
+	ADD FOREIGN KEY (thread_id, account_id) REFERENCES identities (thread_id, account_id),
+	ADD UNIQUE (board_id, post_number);
+
+SELECT setval(pg_get_serial_sequence('posts', 'id'),
+	(SELECT MAX(id) FROM posts));
+

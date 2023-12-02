@@ -1,7 +1,7 @@
 -- account_roles
 
 CREATE TABLE IF NOT EXISTS account_roles (
-  id INT GENERATED ALWAYS AS IDENTITY UNIQUE,
+  id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   role VARCHAR(31) NOT NULL UNIQUE
 );
 
@@ -13,10 +13,10 @@ VALUES
   ('admin'),
   ('super');
 
--- account_statuses
 
+-- account_statuses
 CREATE TABLE IF NOT EXISTS account_statuses (
-	id INT GENERATED ALWAYS AS IDENTITY UNIQUE,
+	id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 	status VARCHAR(31) NOT NULL UNIQUE
 );
 
@@ -28,36 +28,26 @@ VALUES
   ('suspended'),
   ('banned');
 
--- accounts
 
+-- accounts
 CREATE TABLE IF NOT EXISTS accounts (
-	id INT,
+	id INT UNIQUE,
 	username VARCHAR(31) NOT NULL UNIQUE,
 	email VARCHAR(255) NOT NULL UNIQUE,
 	created_at TIMESTAMP NOT NULL DEFAULT NOW(),
 	updated_at TIMESTAMP NOT NULL DEFAULT NOW() CHECK (updated_at >= created_at),
 	deleted_at TIMESTAMP,
+
 	role_id INT NOT NULL DEFAULT 1,
 	status_id INT NOT NULL DEFAULT 1,
+
 	FOREIGN KEY (role_id) REFERENCES account_roles (id),
 	FOREIGN KEY (status_id) REFERENCES account_statuses (id)
 );
 
--- INSERT INTO accounts 
---   (id, username, email, status_id, role_id) 
--- VALUES
---   (1, 'david', 'devduncan89@gmail.com', 1, 4),
---   (2, 'nick', 'nick@gmail.com', 1, 3),
---   (3, 'testguy', 'testdude85@gmail.com', 1, 1),
---   (4, 'coolblue', 'blue32@yahoo.com', 1, 1),
---   (5, 'manbearpig', 'fakeemail@fake.com', 1, 1),
---   (6, 'glown', 'clown@yahoo.com', 4, 1),
---   (7, 'test', 'test@test.com', 1, 2);
-
 -- article_statuses
-
 CREATE TABLE IF NOT EXISTS article_statuses (
-	id SERIAL PRIMARY KEY,
+	id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 	status VARCHAR(31) NOT NULL UNIQUE
 );
 
@@ -70,48 +60,32 @@ VALUES
 	('archived'),
 	('retracted');
 
--- article_contents
 
+-- article_contents
 CREATE TABLE IF NOT EXISTS article_contents (
-  id SERIAL PRIMARY KEY,
-  content TEXT NOT NULL
+  id INT UNIQUE,
+  content TEXT
 );
 
--- INSERT INTO article_contents
---   (content)
--- VALUES
---   ('<div>its my cool article. woaaaah!</div>'),
---   ('<div>dont be. being cool is for lames.</div>'),
---   ('<div>yeah everything still sucks.</div>');
 
 -- articles
-
 CREATE TABLE IF NOT EXISTS articles (
-	id SERIAL PRIMARY KEY,
+	id INT UNIQUE,
 	author_id INT,
 	status_id INT DEFAULT 1,
-  content_id INT NOT NULL,
+  content_id INT UNIQUE,
 	title VARCHAR(127) NOT NULL,
 	slug VARCHAR(63) NOT NULL UNIQUE,
 	created_at TIMESTAMP NOT NULL DEFAULT NOW(),
 	updated_at TIMESTAMP NOT NULL DEFAULT NOW() CHECK (updated_at >= created_at),
 	deleted_at TIMESTAMP,
-  FOREIGN KEY (content_id) REFERENCES article_contents (id),
-	-- FOREIGN KEY (author_id) REFERENCES accounts (id),
 	FOREIGN KEY (status_id) REFERENCES article_statuses (id)
 );
 	
--- INSERT INTO articles
---   (title, content_id, author_id, status_id, slug)
--- VALUES
---   ('Article one', 1, 1, 3, 'hello-world'),
---   ('How to be cool', 2, 2, 1, 'how-to-be-cool'),
---   ('another article on why everything sucks', 3, 2, 3, 'everything-sucks');
 
 -- boards
-
 CREATE TABLE IF NOT EXISTS boards (
-	id SERIAL PRIMARY KEY,
+	id INT UNIQUE,
 	title VARCHAR(63) UNIQUE NOT NULL,
 	short VARCHAR(7) UNIQUE NOT NULL,
 	description VARCHAR(255) NOT NULL,
@@ -121,19 +95,10 @@ CREATE TABLE IF NOT EXISTS boards (
 	post_count INT NOT NULL DEFAULT 1
 );
 
--- INSERT INTO boards 
--- 	(title, short, description)
--- VALUES
--- 	('general', 'gen', 'general discussion of general topics, generally.'),
--- 	('science', 'sci', 'smart guy stuff'),
--- 	('mathematics', 'math', 'numbers and other imaginary constructs'),
--- 	('video games', 'vg', 'real life but better'),
--- 	('art', 'art', 'it''s subjective');
 
 -- thread_statuses
-
 CREATE TABLE IF NOT EXISTS thread_statuses (
-	id SERIAL PRIMARY KEY,
+	id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 	status VARCHAR(31) NOT NULL UNIQUE
 );
 
@@ -146,10 +111,10 @@ VALUES
 	('archived'),                 -- 4
 	('removed');                  -- 5
 
--- thread_roles
 
+-- thread_roles
 CREATE TABLE IF NOT EXISTS thread_roles (
-	id SERIAL PRIMARY KEY,
+	id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 	role VARCHAR(31) NOT NULL UNIQUE
 );
 
@@ -162,16 +127,15 @@ VALUES
 
 
 -- thread_contents
-
 CREATE TABLE IF NOT EXISTS thread_contents (
-  id SERIAL PRIMARY KEY,
+  id INT UNIQUE,
   content TEXT NOT NULL
 );
 
--- threads
 
+-- threads
 CREATE TABLE IF NOT EXISTS threads (
-	id SERIAL PRIMARY KEY,
+	id INT UNIQUE,
 
 	status_id INT NOT NULL DEFAULT 1,
 	board_id INT NOT NULL,
@@ -184,15 +148,13 @@ CREATE TABLE IF NOT EXISTS threads (
 	updated_at TIMESTAMP NOT NULL DEFAULT NOW() CHECK (updated_at >= created_at),
 	deleted_at TIMESTAMP,
 	
-	FOREIGN KEY (status_id) REFERENCES thread_statuses (id),
-  FOREIGN KEY (content_id) REFERENCES thread_contents (id),
-	FOREIGN KEY (board_id) REFERENCES boards (id)
+	FOREIGN KEY (status_id) REFERENCES thread_statuses (id)
 );
 
--- identity_styles
 
+-- identity_styles
 CREATE TABLE IF NOT EXISTS identity_styles (
-	id SERIAL PRIMARY KEY,
+	id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 	style VARCHAR(63) UNIQUE NOT NULL
 );
 
@@ -228,10 +190,10 @@ VALUES
 	('ids-glass-error'),          -- 27
 	('ids-glass-surface');        -- 28
 
--- identity_statuses
 
+-- identity_statuses
 CREATE TABLE IF NOT EXISTS identity_statuses (
-	id SERIAL PRIMARY KEY,
+	id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 	status VARCHAR(31)
 );
 
@@ -245,9 +207,7 @@ VALUES
 
 
 -- identities
-
 CREATE TABLE IF NOT EXISTS identities (
-	-- id SERIAL PRIMARY KEY,
 	thread_id INT NOT NULL,
 	account_id INT NOT NULL,
 	name VARCHAR(31) NOT NULL,
@@ -260,27 +220,24 @@ CREATE TABLE IF NOT EXISTS identities (
 	updated_at TIMESTAMP NOT NULL DEFAULT NOW() CHECK (updated_at >= created_at),
 	deleted_at TIMESTAMP,
 	
-	PRIMARY KEY (thread_id, account_id),
-
-	FOREIGN KEY (thread_id) REFERENCES threads (id),
-	-- FOREIGN KEY (account_id) REFERENCES accounts (id),
-
 	FOREIGN KEY (role_id) REFERENCES thread_roles (id),
 	FOREIGN KEY (style_id) REFERENCES identity_styles (id),
-	FOREIGN KEY (status_id) REFERENCES identity_statuses (id)
+	FOREIGN KEY (status_id) REFERENCES identity_statuses (id),
+
+	UNIQUE (thread_id, account_id)
 );
 
--- post_contents
 
+-- post_contents
 CREATE TABLE IF NOT EXISTS post_contents (
-  id SERIAL PRIMARY KEY,
+  id INT UNIQUE,
   content TEXT NOT NULL
 );
 
--- posts
 
+-- posts
 CREATE TABLE IF NOT EXISTS posts (
-	id SERIAL PRIMARY KEY,
+	id INT UNIQUE,
 
 	thread_id INT NOT NULL,
 	account_id INT NOT NULL,
@@ -293,19 +250,6 @@ CREATE TABLE IF NOT EXISTS posts (
 	updated_at TIMESTAMP NOT NULL DEFAULT NOW() CHECK (updated_at >= created_at),
 	deleted_at TIMESTAMP,
 
-	FOREIGN KEY (thread_id, account_id) REFERENCES identities (thread_id, account_id),
-	
-	FOREIGN KEY (thread_id) REFERENCES threads (id),
-	FOREIGN KEY (board_id) REFERENCES boards (id),
-  FOREIGN KEY (content_id) REFERENCES post_contents (id),
-
 	UNIQUE (board_id, post_number)
 );
 
-
-
-
-
-
-
--- After Seeding:

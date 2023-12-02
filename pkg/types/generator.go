@@ -20,9 +20,9 @@ var (
 	lorem_min_paragraphs       int = 1
 	lorem_max_paragraphs       int = 6
 
-	upper_to_lower_offset_mask rune = 0x20
-	lower_alpha_start          rune = 0x61
-	lower_alpha_end            rune = 0x7a
+	uppercase_bitmask rune = 0x20
+	lower_alpha_start rune = 0x61
+	lower_alpha_end   rune = 0x7a
 
 	special_chars = map[string]rune{
 		"SPACE":         0x20,
@@ -250,7 +250,7 @@ func (l *Lorem) sentence() string {
 		sentence += l.word()
 	}
 	if l.Cfg.capitalizeFirst && len(sentence) > 0 {
-		sentence = string(rune(sentence[0])-upper_to_lower_offset_mask) + sentence[1:]
+		sentence = string(rune(sentence[0])-uppercase_bitmask) + sentence[1:]
 	}
 	if l.Cfg.punctuation && len(sentence) > 0 {
 		sentence += RandomWeightedFromMap[string](l.Cfg.punctuationWeights)
@@ -348,7 +348,7 @@ func uwordStep(current string) string {
 	case 1:
 		word += string(RandomBetween[rune](lower_alpha_start, lower_alpha_end))
 	case 2:
-		word += string(RandomBetween[rune](lower_alpha_start-upper_to_lower_offset_mask, lower_alpha_end-upper_to_lower_offset_mask))
+		word += string(RandomBetween[rune](lower_alpha_start-uppercase_bitmask, lower_alpha_end-uppercase_bitmask))
 	case 3:
 		word += strconv.Itoa(RandomBetween[int](0, 9))
 	case 4:
