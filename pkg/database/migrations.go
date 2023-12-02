@@ -8,10 +8,11 @@ import (
 )
 
 type Migration struct {
-	Index    int
-	Up       []byte
-	Down     []byte
-	Finished bool
+	Index      int
+	Up         []byte
+	Down       []byte
+	Transatory []byte
+	Finished   bool
 }
 
 // reads bytes from a file and returns them
@@ -47,6 +48,8 @@ func createMigration(path string, index int) (*Migration, error) {
 			migration.Up = bs
 		case "down.sql":
 			migration.Down = bs
+		case "transatory.sql":
+			migration.Transatory = bs
 		default:
 			return nil, fmt.Errorf("found file in migration directory that is not up.sql or down.sql: %s", item.Name())
 		}

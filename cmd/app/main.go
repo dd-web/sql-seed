@@ -12,6 +12,10 @@ var (
 	migration_enable   = true
 	migration_path     = "./cmd/migrations"
 	migration_rollback = true
+
+	defered_migrations = map[int][]byte{}
+
+	result_account_verbose_prefix = "    - "
 )
 
 func main() {
@@ -26,12 +30,15 @@ func main() {
 		migrate(store)
 	}
 
-	// SEED
 	fmt.Println("Seeding...")
-	err = store.SeedThread(1)
-	if err != nil {
-		log.Fatal(err)
-	}
+	seeder := types.NewSeeder(store)
+	seeder.Seed()
+
+	fmt.Println("Finishing up...")
+	finalize(store)
+
+	// fmt.Printf("\nResults"+"\n-------\n"+"  * %v Accounts\n    * %v Admins\n    * %v Moderators\n    * %v Users\n", len(seeder.Accounts), len(seeder.Admins), len(seeder.Mods), len(seeder.Accounts)-(len(seeder.Admins)+len(seeder.Mods)))
+	fmt.Printf(types.UnderlinePrint("Results")+"  * %v Accounts\n    * %v Admins\n    * %v Moderators\n    * %v Users\n", len(seeder.Accounts), len(seeder.Admins), len(seeder.Mods), len(seeder.Accounts)-(len(seeder.Admins)+len(seeder.Mods)))
 
 }
 
@@ -57,13 +64,30 @@ func migrate(s *types.Store) {
 	// run up migrations in sequence
 	fmt.Println("Running migrations...")
 	for _, m := range migrations {
-		upStr := string(m.Up)
-		err := s.Execute(upStr)
+		err := s.Execute(string(m.Up))
 		if err != nil {
 			log.Fatal(err)
 		}
+
 		m.Finished = true
+
+		if m.Transatory != nil && len(m.Transatory) > 0 {
+			defered_migrations[m.Index] = m.Transatory
+			m.Finished = false
+		}
 	}
 
 	fmt.Println("Migrations finished.")
+}
+
+// finalizes the migrations by running migrations defered by previous migrations
+// these mostly consist of key constraints
+func finalize(s *types.Store) {
+	for _, m := range defered_migrations {
+		err := s.Execute(string(m))
+		if err != nil {
+			fmt.Printf("Migration: %v\n\n", string(m))
+			log.Fatal("Defered Migration Failure:", err.Error())
+		}
+	}
 }

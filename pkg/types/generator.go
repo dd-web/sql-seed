@@ -50,7 +50,6 @@ var (
 		special_chars["HYPHEN"],
 		special_chars["UNDERSCORE"],
 		special_chars["PERIOD"],
-		special_chars["CARET"],
 	}
 )
 
@@ -95,9 +94,9 @@ func defaultLoremConfig() *LoremConfig {
 	}
 }
 
-/*******************************/
-/*** CONFIGURATION FUNCTIONS ***/
-/*******************************/
+/***************************/
+/* CONFIGURATION FUNCTIONS */
+/***************************/
 
 func LoremMinWordLength(i int) LoremConfigFunc {
 	return func(c *LoremConfig) *LoremConfig {
@@ -212,6 +211,24 @@ func (l *Lorem) Generate() string {
 	return l.Output
 }
 
+func (l *Lorem) GenerateParagraph() string {
+	paragraph := l.paragraph()
+	l.Output = paragraph
+	return l.Output
+}
+
+func (l *Lorem) GenerateSentence() string {
+	sentence := l.sentence()
+	l.Output = sentence
+	return l.Output
+}
+
+func (l *Lorem) GenerateWord() string {
+	word := l.word()
+	l.Output = word
+	return l.Output
+}
+
 // generates a random word defined by the configuration
 func (l *Lorem) word() string {
 	word := ""
@@ -233,8 +250,7 @@ func (l *Lorem) sentence() string {
 		sentence += l.word()
 	}
 	if l.Cfg.capitalizeFirst && len(sentence) > 0 {
-		fl := rune(sentence[0])
-		sentence = string(fl-upper_to_lower_offset_mask) + sentence[1:]
+		sentence = string(rune(sentence[0])-upper_to_lower_offset_mask) + sentence[1:]
 	}
 	if l.Cfg.punctuation && len(sentence) > 0 {
 		sentence += RandomWeightedFromMap[string](l.Cfg.punctuationWeights)
@@ -259,11 +275,14 @@ func (l *Lorem) paragraph() string {
 var (
 	identity_slug_charset string = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-"
 	thread_slug_charset   string = "abcdefghijklmnopqrstuvwxyz0123456789-"
+	article_slug_charset  string = "abcdefghijklmnopqrstuvwxyz-"
 
 	identity_slug_min_length int = 8
 	identity_slug_max_length int = 10
 	thread_slug_min_length   int = 12
 	thread_slug_max_length   int = 16
+	article_slug_min_length  int = 10
+	article_slug_max_length  int = 25
 )
 
 func slug(charset string, min, max int) string {
@@ -280,15 +299,17 @@ func NewThreadSlug() string {
 	return slug(thread_slug_charset, thread_slug_min_length, thread_slug_max_length)
 }
 
+func NewArticleSlug() string {
+	return slug(article_slug_charset, article_slug_min_length, article_slug_max_length)
+}
+
 /*************************/
 /* NAME/EMAIL GENERATION */
 /*************************/
 
 var (
-	username_min_length int = 4
-	username_max_length int = 20
-	// email_min_length    int = 10
-	// email_max_length    int = 26
+	username_min_length int = 6
+	username_max_length int = 12
 
 	email_domain_weights = map[string]int{
 		"gmail.com":      100,
@@ -299,22 +320,11 @@ var (
 		"live.com":       50,
 		"icloud.com":     35,
 		"fastmail.org":   5,
-		"harvard.edu":    2,
 		"mit.edu":        3,
-		"stanford.edu":   5,
-		"princeton.edu":  2,
-		"yale.edu":       2,
-		"berkeley.edu":   2,
-		"ucla.edu":       4,
-		"usc.edu":        4,
 		"nyu.edu":        6,
-		"cornell.edu":    4,
 		"brown.edu":      5,
 		"fbi.gov":        4,
-		"cia.gov":        1,
 		"nsa.gov":        1,
-		"usps.gov":       1,
-		"irs.gov":        1,
 	}
 
 	uword_step_weights = map[int]int{
@@ -329,6 +339,7 @@ func safeRandomSpecialChar() rune {
 	return safe_special_chars[RandomBetween[int](0, len(safe_special_chars))]
 }
 
+// called for each letter of a username to generate the entire username
 func uwordStep(current string) string {
 	step := RandomWeightedFromMap[int](uword_step_weights)
 	word := current
@@ -343,6 +354,9 @@ func uwordStep(current string) string {
 	case 4:
 		word += string(safeRandomSpecialChar())
 	}
+
+	// fmt.Println("step:", step, " og:", current, " new:", word)
+
 	return word
 }
 

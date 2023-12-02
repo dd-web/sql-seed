@@ -6,6 +6,7 @@ package types
 
 import (
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -549,20 +550,107 @@ func (is IdentityStyle) ID() int {
 	return is.Int()
 }
 
-/***********************/
-/* SEED CONFIG / TYPES */
-/***********************/
+/*********************************/
+/* SEED CONFIG / APP LEVEL TYPES */
+/*********************************/
+var (
+	min_account_count = 100
+	max_account_count = 200
 
-type Seeder struct {
-	Store    *Store
-	Accounts []*Account
+	min_article_count = 20
+	max_article_count = 100
+
+	min_thread_per_board = 50
+	max_thread_per_board = 200
+
+	min_post_per_thread = 3
+	max_post_per_thread = 100
+
+	default_boards [][]string = [][]string{
+		{"general", "gen", "general discussion on general topics, generally."},
+		{"mathematics", "math", "do some cool algebra stuff"},
+		{"science", "sci", "talk about science and stuff"},
+		{"technology", "tech", "talk about technology and stuff"},
+		{"politics", "pol", "talk about politics and stuff"},
+		{"history", "hist", "talk about history and stuff"},
+		{"cinema", "mov", "talk about movies n stuff"},
+		{"music", "mus", "talk about music n stuff"},
+		{"literature", "lit", "talk about books n stuff"},
+		{"art", "art", "talk about art n stuff"},
+		{"random", "rng", "youll never know what youll get"},
+	}
+
+	default_accounts [][]string = [][]string{
+		{"supafiya", "devduncan89@gmail.com", "super"},
+		{"nyronic", "nyronic@gmail.com", "admin"},
+		{"cherio", "chz0z@yahoo.com", "admin"},
+	}
+)
+
+type SeederConfigFunc func(*SeederConfig) *SeederConfig
+
+type SeederConfig struct {
+	minAccountCount   int
+	maxAccountCount   int
+	minArticleCount   int
+	maxArticleCount   int
+	minThreadPerBoard int
+	maxThreadPerBoard int
+	minPostPerThread  int
+	maxPostPerThread  int
 }
 
-func NewSeeder(s *Store) *Seeder {
-	return &Seeder{
-		Store:    s,
-		Accounts: []*Account{},
+func defaultSeederConfig() *SeederConfig {
+	return &SeederConfig{
+		minAccountCount:   min_account_count,
+		maxAccountCount:   max_account_count,
+		minArticleCount:   min_article_count,
+		maxArticleCount:   max_article_count,
+		minThreadPerBoard: min_thread_per_board,
+		maxThreadPerBoard: max_thread_per_board,
+		minPostPerThread:  min_post_per_thread,
+		maxPostPerThread:  max_post_per_thread,
 	}
+}
+
+type Seeder struct {
+	Store *Store
+	Cfg   *SeederConfig
+
+	Accounts []*Account
+	Boards   []*Board
+
+	Admins []*Account
+	Mods   []*Account
+}
+
+func NewSeeder(s *Store, cfg ...SeederConfigFunc) *Seeder {
+	config := defaultSeederConfig()
+	for _, f := range cfg {
+		config = f(config)
+	}
+	return &Seeder{
+		Store: s,
+		Cfg:   config,
+
+		Accounts: []*Account{},
+		Boards:   []*Board{},
+
+		Admins: []*Account{},
+		Mods:   []*Account{},
+	}
+}
+
+func (s *Seeder) Seed() {
+	s.SeedAccounts()
+	s.SeedBoards()
+
+	// for _, a := range s.Accounts {
+	// 	fmt.Printf("%+v\n\n", a)
+	// }
+
+	s.insertAccounts()
+
 }
 
 /* ACCOUNT */
@@ -579,11 +667,23 @@ type Account struct {
 	CreatedAt *time.Time `json:"created_at"`
 	UpdatedAt *time.Time `json:"updated_at"`
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+
+	SqlInsertString func() string
 }
 
-func newAccount() *Account {
+func (a *Account) insertString() string {
+	return "(" +
+		fmt.Sprint(a.ID) + ", " +
+		"'" + a.Username + "', " +
+		"'" + a.Email + "', " +
+		fmt.Sprint(a.Status.ID()) + ", " +
+		fmt.Sprint(a.Role.ID()) + ")"
+}
+
+func newAccount(id int) *Account {
 	ts := time.Now().UTC()
 	return &Account{
+		ID:        id,
 		CreatedAt: &ts,
 		UpdatedAt: &ts,
 	}
@@ -596,13 +696,120 @@ func (a *Account) randomize() {
 	a.Email = AddDomainSuffix(a.Username)
 }
 
+func (a *Account) track(s *Seeder) {
+	switch a.Role {
+	case AccountRoleSuper, AccountRoleAdmin:
+		s.Admins = append(s.Admins, a)
+	case AccountRoleModerator:
+		s.Mods = append(s.Mods, a)
+	}
+	s.Accounts = append(s.Accounts, a)
+}
+
+// Entry
 func (s *Seeder) SeedAccounts() {
-	num := RandomBetween(30, 45)
+	num := RandomBetween(s.Cfg.minAccountCount, s.Cfg.maxAccountCount)
+	var sum int = 0
+
+	for _, account := range default_accounts {
+		sum++
+		a := newAccount(sum)
+		a.Username = account[0]
+		a.Email = account[1]
+		a.Role = AccountRole(account[2])
+		a.Status = RandomFromChoice[AccountStatus](AccountStatusActive, AccountStatusInactive)
+		a.track(s)
+	}
+
 	for i := 0; i < num; i++ {
-		act := newAccount()
-		act.randomize()
-		act.ID = i + 1
-		s.Accounts = append(s.Accounts, act)
-		fmt.Printf("\nAccount: %+v\n", act)
+		sum++
+		a := newAccount(sum)
+		a.randomize()
+		a.track(s)
 	}
 }
+
+func (s *Seeder) insertAccounts() {
+	var q string = `INSERT INTO accounts (id, username, email, status_id, role_id) VALUES `
+
+	for _, a := range s.Accounts {
+		q += a.insertString() + ", "
+	}
+
+	q = q[:len(q)-2] + ";"
+
+	// fmt.Println("Insert string:\n\n", q, "\n\n")
+	err := s.Store.Execute(q)
+	if err != nil {
+		log.Fatal("Account Insertion Error:", err.Error())
+	}
+
+}
+
+/* BOARD */
+
+type Board struct {
+	ID    int    `json:"id"`
+	Title string `json:"title"`
+	Short string `json:"short"`
+	Desc  string `json:"description"`
+
+	CreatedAt *time.Time `json:"created_at"`
+	UpdatedAt *time.Time `json:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+}
+
+func newBoard() *Board {
+	ts := time.Now().UTC()
+	return &Board{
+		CreatedAt: &ts,
+		UpdatedAt: &ts,
+	}
+}
+
+func (s *Seeder) SeedBoards() {
+	for i, board := range default_boards {
+		b := newBoard()
+		b.ID = i + 1
+		b.Title = board[0]
+		b.Short = board[1]
+		b.Desc = board[2]
+		s.Boards = append(s.Boards, b)
+	}
+}
+
+/* ARTICLE */
+
+type Article struct {
+	ID    int    `json:"id"`
+	Title string `json:"title"`
+	Slug  string `json:"slug"`
+
+	Status  ArticleStatus
+	Author  *Account
+	Content string
+
+	CreatedAt *time.Time `json:"created_at"`
+	UpdatedAt *time.Time `json:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+}
+
+func newArticle() *Article {
+	ts := time.Now().UTC()
+	return &Article{
+		CreatedAt: &ts,
+		UpdatedAt: &ts,
+	}
+}
+
+func (a *Article) randomize() {
+	ts := time.Now().UTC()
+	para := NewLorem()
+	a.Content = para.Generate()
+	a.Title = para.GenerateSentence()
+	a.Status = RandomEnumArticleStatus()
+	a.Slug = NewArticleSlug()
+	a.UpdatedAt = &ts
+}
+
+type SQLStringBuilderFunc func()
