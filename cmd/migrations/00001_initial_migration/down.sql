@@ -1,6 +1,7 @@
+DROP TABLE IF EXISTS identity_posts;
+DROP TABLE IF EXISTS identities;
 DROP TABLE IF EXISTS posts;
 DROP TABLE IF EXISTS post_contents;
-DROP TABLE IF EXISTS identities;
 DROP TABLE IF EXISTS identity_statuses;
 DROP TABLE IF EXISTS identity_styles;
 DROP TABLE IF EXISTS threads;

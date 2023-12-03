@@ -49,18 +49,10 @@ SELECT setval(pg_get_serial_sequence('thread_contents', 'id'),
 ALTER TABLE threads
 	ALTER id ADD GENERATED ALWAYS AS IDENTITY (START WITH 1),
 	ADD PRIMARY KEY (id),
-	ADD FOREIGN KEY (content_id) REFERENCES thread_contents (id),
 	ADD FOREIGN KEY (board_id) REFERENCES boards (id);
 
 SELECT setval(pg_get_serial_sequence('threads', 'id'),
 	(SELECT MAX(id) FROM threads));
-
-
--- -- identity id primary key update
-ALTER TABLE identities
-	ADD FOREIGN KEY (thread_id) REFERENCES threads (id),
-	ADD FOREIGN KEY (account_id) REFERENCES accounts (id),
-	ADD PRIMARY KEY (thread_id, account_id);
 
 
 -- post contents id primary key update
@@ -79,9 +71,27 @@ ALTER TABLE posts
 	ADD FOREIGN KEY (board_id) REFERENCES boards (id),
 	ADD FOREIGN KEY (thread_id) REFERENCES threads (id),
 	ADD FOREIGN KEY (content_id) REFERENCES post_contents (id),
-	ADD FOREIGN KEY (thread_id, account_id) REFERENCES identities (thread_id, account_id),
-	ADD UNIQUE (board_id, post_number);
+	ADD FOREIGN KEY (account_id) REFERENCES accounts (id);
 
 SELECT setval(pg_get_serial_sequence('posts', 'id'),
 	(SELECT MAX(id) FROM posts));
 
+
+-- identity id primary key update
+ALTER TABLE identities
+	ALTER id ADD GENERATED ALWAYS AS IDENTITY (START WITH 1),
+  ADD PRIMARY KEY (id),
+	ADD FOREIGN KEY (thread_id) REFERENCES threads (id),
+	ADD FOREIGN KEY (account_id) REFERENCES accounts (id);
+
+SELECT setval(pg_get_serial_sequence('identities', 'id'),
+	(SELECT MAX(id) FROM identities));
+
+
+-- identity posts id primary key update
+ALTER TABLE identity_posts
+	ALTER id ADD GENERATED ALWAYS AS IDENTITY (START WITH 1),
+	ADD PRIMARY KEY (id),
+	ADD FOREIGN KEY (identity_id) REFERENCES identities (id),
+	ADD FOREIGN KEY (board_id) REFERENCES boards (id),
+	ADD FOREIGN KEY (post_id) REFERENCES posts (id);

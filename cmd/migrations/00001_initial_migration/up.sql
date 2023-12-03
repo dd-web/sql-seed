@@ -137,9 +137,8 @@ CREATE TABLE IF NOT EXISTS thread_contents (
 CREATE TABLE IF NOT EXISTS threads (
 	id INT UNIQUE,
 
-	status_id INT NOT NULL DEFAULT 1,
 	board_id INT NOT NULL,
-  content_id INT NOT NULL,
+	status_id INT NOT NULL DEFAULT 1,
 
 	title VARCHAR(127) NOT NULL,
 	slug VARCHAR(127) NOT NULL UNIQUE,
@@ -206,10 +205,39 @@ VALUES
 	('banned');                   -- 4
 
 
--- identities
-CREATE TABLE IF NOT EXISTS identities (
+-- post_contents
+CREATE TABLE IF NOT EXISTS post_contents (
+  id INT UNIQUE,
+  content TEXT NOT NULL
+);
+
+
+-- posts
+CREATE TABLE IF NOT EXISTS posts (
+	id INT UNIQUE,
+
+	board_id INT NOT NULL,
 	thread_id INT NOT NULL,
 	account_id INT NOT NULL,
+  content_id INT NOT NULL,
+	
+	post_number INT NOT NULL,
+	
+	created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+	updated_at TIMESTAMP NOT NULL DEFAULT NOW() CHECK (updated_at >= created_at),
+	deleted_at TIMESTAMP,
+
+	UNIQUE (board_id, post_number)
+);
+
+-- identities
+CREATE TABLE IF NOT EXISTS identities (
+	id INT UNIQUE,
+
+	board_id INT NOT NULL,
+	thread_id INT NOT NULL,
+	account_id INT NOT NULL,
+
 	name VARCHAR(31) NOT NULL,
 	
 	style_id INT NOT NULL,
@@ -224,32 +252,14 @@ CREATE TABLE IF NOT EXISTS identities (
 	FOREIGN KEY (style_id) REFERENCES identity_styles (id),
 	FOREIGN KEY (status_id) REFERENCES identity_statuses (id),
 
-	UNIQUE (thread_id, account_id)
+	UNIQUE (board_id, thread_id, account_id)
 );
 
 
--- post_contents
-CREATE TABLE IF NOT EXISTS post_contents (
-  id INT UNIQUE,
-  content TEXT NOT NULL
-);
-
-
--- posts
-CREATE TABLE IF NOT EXISTS posts (
+-- identity_posts
+CREATE TABLE IF NOT EXISTS identity_posts (
 	id INT UNIQUE,
-
-	thread_id INT NOT NULL,
-	account_id INT NOT NULL,
-	
-	post_number INT NOT NULL,
+	identity_id INT NOT NULL,
 	board_id INT NOT NULL,
-  content_id INT NOT NULL,
-	
-	created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-	updated_at TIMESTAMP NOT NULL DEFAULT NOW() CHECK (updated_at >= created_at),
-	deleted_at TIMESTAMP,
-
-	UNIQUE (board_id, post_number)
+	post_id INT NOT NULL
 );
-

@@ -401,11 +401,14 @@ var (
 	min_article_count = 20
 	max_article_count = 100
 
-	min_thread_per_board = 50
-	max_thread_per_board = 200
+	min_thread_per_board = 80
+	max_thread_per_board = 150
 
 	min_post_per_thread = 3
-	max_post_per_thread = 100
+	max_post_per_thread = 70
+
+	default_board_weight  = 500_000_000
+	default_thread_weight = 500_000_000
 
 	default_boards [][]string = [][]string{
 		{"general", "gen", "general discussion on general topics, generally."},
@@ -454,15 +457,33 @@ func defaultSeederConfig() *SeederConfig {
 	}
 }
 
-func defaultSeeder() *Seeder {
+func defaultSeeder(s *Store) *Seeder {
 	return &Seeder{
-		Accounts:       []*Account{},
-		Boards:         []*Board{},
+		Store: s,
+		Cfg:   defaultSeederConfig(),
+
+		Accounts: []*Account{},
+		Admins:   []*Account{},
+		Mods:     []*Account{},
+
+		Boards: []*Board{},
+
 		Articles:       []*Article{},
 		ArticleContent: []*ArticleContent{},
-		Threads:        map[string][]*Thread{},
-		Admins:         []*Account{},
-		Mods:           []*Account{},
+
+		Threads: []*Thread{},
+
+		Identities:    []*Identity{},
+		IdentityPosts: []*IdentityPost{},
+
+		Posts:       []*Post{},
+		PostContent: []*PostContent{},
+
+		BoardWeights: map[int]int{},
+		BoardIDMap:   map[int]*Board{},
+
+		// thread_id -> account_id (if exist in thread) identities are resolved or created on the fly
+		identityHeapIndex: map[int]map[int]*Identity{},
 	}
 }
 
@@ -476,20 +497,31 @@ type Seeder struct {
 	Articles       []*Article
 	ArticleContent []*ArticleContent
 
-	Threads map[string][]*Thread
+	Identities    []*Identity
+	IdentityPosts []*IdentityPost
+
+	Threads []*Thread
+
+	Posts       []*Post
+	PostContent []*PostContent
 
 	Admins []*Account
 	Mods   []*Account
+
+	BoardIDMap   map[int]*Board
+	BoardWeights map[int]int
+
+	// thread_id -> account_id (if exist in thread)
+	// will either resolve or create a new one
+	identityHeapIndex map[int]map[int]*Identity
 }
 
 func NewSeeder(s *Store, cfg ...SeederConfigFunc) *Seeder {
-	seeder := defaultSeeder()
-	config := defaultSeederConfig()
+	seeder := defaultSeeder(s)
 	for _, f := range cfg {
-		config = f(config)
+		seeder.Cfg = f(seeder.Cfg)
 	}
-	seeder.Cfg = config
-	seeder.Store = s
+
 	return seeder
 }
 
@@ -501,6 +533,19 @@ func (s *Seeder) PrintResults() {
 	fmt.Printf("    - %v Users\n", len(s.Accounts)-(len(s.Admins)+len(s.Mods)))
 	fmt.Printf("  - %v Articles\n", len(s.Articles))
 	fmt.Printf("  - %v Boards\n", len(s.Boards))
+
+	total_threads := 0
+	total_posts := 0
+
+	for _, board := range s.Boards {
+		fmt.Printf("    - %v Threads in %v with %v posts\n", len(board.ThreadIDMap), board.Title, board.PostCount)
+		total_threads += len(board.ThreadIDMap)
+		total_posts += board.PostCount
+	}
+
+	fmt.Printf("  - %v Total Threads\n", total_threads)
+	fmt.Printf("  - %v Total Posts\n", total_posts)
+	fmt.Printf("	- %v Identities\n", len(s.Identities))
 }
 
 type InsertService string
@@ -535,31 +580,34 @@ func finalizeTransaction(mod string, tx *sql.Tx, stmt *sql.Stmt) *SeedDBError {
 	return nil
 }
 
+type SeedFunc func() *SeedDBError
+
 func (s *Seeder) Seed() {
 	/* Generation */
 	s.seedAccounts()
 	s.seedBoards()
 	s.seedArticles()
+	s.seedThreads()
+	s.seedPosts()
 
 	/* Insert */
-	err := s.insertAccounts()
-	if err != nil {
-		log.Fatal(err)
+	inserters := []SeedFunc{
+		s.insertAccounts,
+		s.insertBoards,
+		s.insertArticleContent,
+		s.insertArticles,
+		s.insertThreads,
+		s.insertPostContent,
+		s.insertPosts,
+		s.insertIdentities,
+		s.insertIdentityPosts,
 	}
 
-	err = s.insertBoards()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = s.insertArticleContent()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = s.insertArticles()
-	if err != nil {
-		log.Fatal(err)
+	for _, ifn := range inserters {
+		err := ifn()
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
@@ -650,25 +698,24 @@ type Board struct {
 	Desc  string
 
 	PostCount int
-	Threads   []*Thread
+
+	ThreadIDMap   map[int]*Thread
+	ThreadWeights map[int]int
 
 	CreatedAt *time.Time
 	UpdatedAt *time.Time
 	DeletedAt *time.Time
 }
 
-func (b *Board) track(s *Seeder) {
-	s.Boards = append(s.Boards, b)
-	s.Threads[b.Short] = []*Thread{}
-}
-
 func newBoard(id int) *Board {
 	ts := time.Now().UTC()
 	return &Board{
-		ID:        id,
-		PostCount: 1,
-		CreatedAt: &ts,
-		UpdatedAt: &ts,
+		ID:            id,
+		PostCount:     1,
+		ThreadIDMap:   map[int]*Thread{},
+		ThreadWeights: map[int]int{},
+		CreatedAt:     &ts,
+		UpdatedAt:     &ts,
 	}
 }
 
@@ -678,7 +725,12 @@ func (s *Seeder) seedBoards() {
 		b.Title = board[0]
 		b.Short = board[1]
 		b.Desc = board[2]
-		b.track(s)
+
+		// weights change as more posts are added, dynamically shifting the distribution
+		s.BoardWeights[b.ID] = default_board_weight
+		s.BoardIDMap[b.ID] = b
+
+		s.Boards = append(s.Boards, b)
 	}
 }
 
@@ -736,14 +788,6 @@ func newArticleContent(id int) *ArticleContent {
 	return ac
 }
 
-func (a *Article) track(s *Seeder) {
-	s.Articles = append(s.Articles, a)
-}
-
-func (ac *ArticleContent) track(s *Seeder) {
-	s.ArticleContent = append(s.ArticleContent, ac)
-}
-
 func (s *Seeder) seedArticles() {
 	num := RandomBetween(s.Cfg.minArticleCount, s.Cfg.maxArticleCount)
 	loremTitle := NewLorem(LoremPunctuation(false), LoremMaxSentenceLength(10))
@@ -764,8 +808,8 @@ func (s *Seeder) seedArticles() {
 
 		a.Content = ac
 
-		ac.track(s)
-		a.track(s)
+		s.ArticleContent = append(s.ArticleContent, ac)
+		s.Articles = append(s.Articles, a)
 	}
 }
 
@@ -796,14 +840,76 @@ func (s *Seeder) insertArticles() *SeedDBError {
 	return finalizeTransaction("Article", tx, stmt)
 }
 
+/* IDENTITY */
+/************/
+
+type Identity struct {
+	ID int
+
+	ThreadID  int
+	AccountID int
+	BoardID   int
+
+	Name string
+
+	Style  IdentityStyle
+	Status IdentityStatus
+	Role   ThreadRole
+
+	CreatedAt *time.Time
+	UpdatedAt *time.Time
+	DeletedAt *time.Time
+}
+
+var identity_id_counter int = 0
+
+func resolveIdentity(account_id int, thread_id int, board_id int, s *Seeder) *Identity {
+	exist, ok := s.identityHeapIndex[thread_id][account_id]
+	if ok {
+		return exist
+	}
+
+	identity_id_counter++
+	ts := time.Now().UTC()
+	created := &Identity{
+		ID:        identity_id_counter,
+		AccountID: account_id,
+		ThreadID:  thread_id,
+		BoardID:   board_id,
+		Style:     RandomEnumIdentityStyle(),
+		Status:    RandomEnumIdentityStatus(),
+		Role:      RandomEnumThreadRole(),
+		Name:      NewIdentitySlug(),
+		CreatedAt: &ts,
+		UpdatedAt: &ts,
+	}
+	s.identityHeapIndex[thread_id][account_id] = created
+	s.Identities = append(s.Identities, created)
+	return created
+}
+
+func (s *Seeder) insertIdentities() *SeedDBError {
+	tx, _ := s.Store.DB.Begin()
+	stmt, _ := tx.Prepare(pq.CopyIn("identities", "id", "thread_id", "account_id", "name", "style_id", "status_id", "role_id", "board_id"))
+
+	for _, id := range s.Identities {
+		_, err := stmt.Exec(id.ID, id.ThreadID, id.AccountID, id.Name, id.Style.ID(), id.Status.ID(), id.Role.ID(), id.BoardID)
+		if err != nil {
+			return &SeedDBError{Model: "Identity", Service: StatementExecError, Message: err.Error()}
+		}
+	}
+
+	return finalizeTransaction("Identity", tx, stmt)
+}
+
 /* THREAD & THREAD CONTENTS */
 /****************************/
 
 type Thread struct {
-	ID      int
-	Status  ThreadStatus
-	BoardID int
-	Content *ThreadContent
+	ID        int
+	Status    ThreadStatus
+	BoardID   int
+	ContentID int
 
 	Title string
 	Slug  string
@@ -813,9 +919,63 @@ type Thread struct {
 	DeletedAt *time.Time
 }
 
-type ThreadContent struct {
-	ID      int
-	Content string
+func newThread(id int, board_id int) *Thread {
+	ts := time.Now().UTC()
+	return &Thread{
+		ID:        id,
+		Status:    RandomEnumThreadStatus(),
+		BoardID:   board_id,
+		CreatedAt: &ts,
+		UpdatedAt: &ts,
+	}
+}
+
+func (s *Seeder) seedThreads() {
+	loremTitle := NewLorem(LoremPunctuation(false), LoremMaxSentenceLength(10))
+	var sum int = 0
+
+	for _, board := range s.Boards {
+		num := RandomBetween[int](s.Cfg.minThreadPerBoard, s.Cfg.maxThreadPerBoard)
+
+		for i := 0; i < num; i++ {
+			sum++
+			thread := newThread(sum, board.ID)
+			s.identityHeapIndex[thread.ID] = map[int]*Identity{}
+
+			thread.Title = loremTitle.GenerateSentence()
+			thread.Slug = NewThreadSlug()
+
+			creatorAccount := RandomFromList[*Account](s.Accounts)
+			creator := resolveIdentity(creatorAccount.ID, thread.ID, board.ID, s)
+			creator.Role = ThreadRoleCreator
+
+			postContent := newPostContent()
+			post := newPost(thread.ID, board.ID, postContent.ID, creatorAccount.ID, s)
+
+			newIdentityPost(creator.ID, board.ID, post.ID, s)
+
+			s.PostContent = append(s.PostContent, postContent)
+			s.Posts = append(s.Posts, post)
+			s.Threads = append(s.Threads, thread)
+
+			board.ThreadIDMap[thread.ID] = thread
+			board.ThreadWeights[thread.ID] = default_thread_weight
+		}
+	}
+}
+
+func (s *Seeder) insertThreads() *SeedDBError {
+	tx, _ := s.Store.DB.Begin()
+	stmt, _ := tx.Prepare(pq.CopyIn("threads", "id", "board_id", "title", "slug", "status_id"))
+
+	for _, t := range s.Threads {
+		_, err := stmt.Exec(t.ID, t.BoardID, t.Title, t.Slug, t.Status.ID())
+		if err != nil {
+			return &SeedDBError{Model: "Thread", Service: StatementExecError, Message: err.Error()}
+		}
+	}
+
+	return finalizeTransaction("Thread", tx, stmt)
 }
 
 /* POST & POST CONTENT */
@@ -824,15 +984,158 @@ type ThreadContent struct {
 type Post struct {
 	ID int
 
-	Board   *Board
-	Thread  *Thread
-	Account *Account
-	Content *PostContent
+	BoardID   int
+	ThreadID  int
+	ContentID int
+	AccountID int
 
 	PostNumber int
+}
+
+var post_id_counter int = 0
+
+func newPost(thread_id, board_id, content_id, account_id int, s *Seeder) *Post {
+	post_id_counter++
+	s.BoardIDMap[board_id].PostCount++
+	return &Post{
+		ID:         post_id_counter,
+		PostNumber: s.BoardIDMap[board_id].PostCount,
+		ThreadID:   thread_id,
+		BoardID:    board_id,
+		ContentID:  content_id,
+		AccountID:  account_id,
+	}
+}
+
+func (s *Seeder) seedPosts() {
+	var sum int = 0
+
+	for i := 0; i < len(s.Boards); i++ {
+		// each board --> a random number of threads are chosen from a random board
+		// even though we are iterating over the boards, we are choosing threads from a random board
+		num := RandomBetween[int](s.Cfg.minPostPerThread, s.Cfg.maxPostPerThread)
+
+		randBoard := RandomWeightedFromMap[int](s.BoardWeights)
+		board, ok := s.BoardIDMap[randBoard]
+		if !ok {
+			log.Fatal("board map id overflow", randBoard)
+		}
+
+		for j := 0; j < len(board.ThreadIDMap); j++ {
+			// now for each board, and each thread on that board we randomly choose a thread from it
+			// each iteration. it's distrubtive and dynamic, so the distribution changes as we go
+			// so althrough we choose a random thread every post - the distribution is weighted
+			for k := 0; k < num; k++ {
+				sum++
+				boardId := RandomWeightedFromMap[int](s.BoardWeights)
+				board, ok := s.BoardIDMap[boardId]
+				if !ok {
+					log.Fatal("board map id overflow", boardId)
+				}
+
+				threadId := RandomWeightedFromMap[int](board.ThreadWeights)
+				thread, ok := board.ThreadIDMap[threadId]
+				if !ok {
+					log.Fatal("thread map id overflow", threadId)
+				}
+
+				s.BoardWeights[board.ID] = s.BoardWeights[board.ID] - (k + j)
+				board.ThreadWeights[thread.ID] = board.ThreadWeights[thread.ID] - k
+
+				postContent := newPostContent()
+				account := RandomFromList[*Account](s.Accounts)
+
+				identity := resolveIdentity(account.ID, thread.ID, board.ID, s)
+				post := newPost(thread.ID, board.ID, postContent.ID, account.ID, s)
+
+				newIdentityPost(identity.ID, board.ID, post.ID, s)
+
+				s.PostContent = append(s.PostContent, postContent)
+				s.Posts = append(s.Posts, post)
+			}
+
+		}
+	}
+
+}
+
+func (s *Seeder) insertPosts() *SeedDBError {
+	tx, _ := s.Store.DB.Begin()
+	stmt, _ := tx.Prepare(pq.CopyIn("posts", "id", "thread_id", "board_id", "content_id", "account_id", "post_number"))
+
+	for _, p := range s.Posts {
+		_, err := stmt.Exec(p.ID, p.ThreadID, p.BoardID, p.ContentID, p.AccountID, p.PostNumber)
+		if err != nil {
+			return &SeedDBError{Model: "Post", Service: StatementExecError, Message: err.Error()}
+		}
+	}
+
+	return finalizeTransaction("Post", tx, stmt)
 }
 
 type PostContent struct {
 	ID      int
 	Content string
+}
+
+var post_content_id_counter int = 0
+
+func newPostContent() *PostContent {
+	post_content_id_counter++
+	lorem := NewLorem()
+	return &PostContent{
+		ID:      post_content_id_counter,
+		Content: lorem.Generate(),
+	}
+}
+
+func (s *Seeder) insertPostContent() *SeedDBError {
+	tx, _ := s.Store.DB.Begin()
+	stmt, _ := tx.Prepare(pq.CopyIn("post_contents", "id", "content"))
+
+	for _, pc := range s.PostContent {
+		_, err := stmt.Exec(pc.ID, pc.Content)
+		if err != nil {
+			return &SeedDBError{Model: "PostContent", Service: StatementExecError, Message: err.Error()}
+		}
+	}
+
+	return finalizeTransaction("PostContent", tx, stmt)
+}
+
+/* IDENTITY POSTS */
+/******************/
+
+type IdentityPost struct {
+	ID         int
+	IdentityID int
+	BoardID    int
+	PostID     int
+}
+
+var identity_post_id_counter int = 0
+
+func newIdentityPost(identity_id, board_id, post_id int, s *Seeder) {
+	identity_post_id_counter++
+	created := &IdentityPost{
+		ID:         identity_post_id_counter,
+		IdentityID: identity_id,
+		BoardID:    board_id,
+		PostID:     post_id,
+	}
+	s.IdentityPosts = append(s.IdentityPosts, created)
+}
+
+func (s *Seeder) insertIdentityPosts() *SeedDBError {
+	tx, _ := s.Store.DB.Begin()
+	stmt, _ := tx.Prepare(pq.CopyIn("identity_posts", "id", "identity_id", "board_id", "post_id"))
+
+	for _, idp := range s.IdentityPosts {
+		_, err := stmt.Exec(idp.ID, idp.IdentityID, idp.BoardID, idp.PostID)
+		if err != nil {
+			return &SeedDBError{Model: "IdentityPost", Service: StatementExecError, Message: err.Error()}
+		}
+	}
+
+	return finalizeTransaction("IdentityPost", tx, stmt)
 }

@@ -17,7 +17,7 @@ var (
 	pg_default_connfmt string = "user=%s password=%s dbname=%s host=%s port=%s sslmode=%s"
 	pg_default_user    string = "postgres"
 	pg_default_pass    string = "admin"
-	pg_default_dbname  string = "local_db_test"
+	pg_default_dbname  string = "opforu_local_pg"
 	pg_default_host    string = "david.local"
 	pg_default_port    string = "5432"
 	pg_default_ssl     string = "disable"
