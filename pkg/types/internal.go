@@ -427,6 +427,31 @@ var (
 	}
 )
 
+func (s *Seeder) PrintResults() {
+	fmt.Print(UnderlinePrint("Results"))
+	fmt.Printf("  - %v Accounts\n", len(s.Accounts))
+	fmt.Printf("    - %v Admins\n", len(s.Admins))
+	fmt.Printf("    - %v Moderators\n", len(s.Mods))
+	fmt.Printf("    - %v Users\n", len(s.Accounts)-(len(s.Admins)+len(s.Mods)))
+	fmt.Printf("  - %v Articles\n", len(s.Articles))
+	fmt.Printf("  - %v Boards\n", len(s.Boards))
+
+	total_threads := 0
+	total_posts := 0
+
+	for _, board := range s.Boards {
+		fmt.Printf("    - %v Threads in %v with %v posts\n", len(board.ThreadIDMap), board.Title, board.PostCount)
+		total_threads += len(board.ThreadIDMap)
+		total_posts += board.PostCount
+	}
+
+	fmt.Printf("  - %v Threads in total\n", total_threads)
+	fmt.Printf("  - %v Posts in total\n", total_posts)
+	fmt.Printf("  - %v Identities in total\n", len(s.Identities))
+
+	fmt.Printf("-------------------------\n")
+}
+
 type SeederConfigFunc func(*SeederConfig) *SeederConfig
 
 type SeederConfig struct {
@@ -519,31 +544,6 @@ func NewSeeder(s *Store, cfg ...SeederConfigFunc) *Seeder {
 	return seeder
 }
 
-func (s *Seeder) PrintResults() {
-	fmt.Print(UnderlinePrint("Results"))
-	fmt.Printf("  - %v Accounts\n", len(s.Accounts))
-	fmt.Printf("    - %v Admins\n", len(s.Admins))
-	fmt.Printf("    - %v Moderators\n", len(s.Mods))
-	fmt.Printf("    - %v Users\n", len(s.Accounts)-(len(s.Admins)+len(s.Mods)))
-	fmt.Printf("  - %v Articles\n", len(s.Articles))
-	fmt.Printf("  - %v Boards\n", len(s.Boards))
-
-	total_threads := 0
-	total_posts := 0
-
-	for _, board := range s.Boards {
-		fmt.Printf("    - %v Threads in %v with %v posts\n", len(board.ThreadIDMap), board.Title, board.PostCount)
-		total_threads += len(board.ThreadIDMap)
-		total_posts += board.PostCount
-	}
-
-	fmt.Printf("  - %v Threads in total\n", total_threads)
-	fmt.Printf("  - %v Posts in total\n", total_posts)
-	fmt.Printf("  - %v Identities in total\n", len(s.Identities))
-
-	fmt.Printf("-------------------------\n")
-}
-
 type InsertService string
 
 const (
@@ -579,8 +579,6 @@ func finalizeTransaction(mod string, tx *sql.Tx, stmt *sql.Stmt) *SeedDBError {
 type SeedFunc func() *SeedDBError
 
 func (s *Seeder) Seed() {
-	/* Generation */
-
 	fmt.Println("Generating data...")
 
 	s.seedAccounts()
@@ -591,7 +589,6 @@ func (s *Seeder) Seed() {
 
 	fmt.Println("Batching queries...")
 
-	/* Insert */
 	inserters := []SeedFunc{
 		s.insertAccounts,
 		s.insertBoards,
@@ -726,8 +723,6 @@ func (s *Seeder) seedBoards() {
 		b.Title = board[0]
 		b.Short = board[1]
 		b.Desc = board[2]
-
-		// weights change as more posts are added, dynamically shifting the distribution
 		s.BoardWeights[b.ID] = default_board_weight
 		s.BoardIDMap[b.ID] = b
 
@@ -1010,40 +1005,41 @@ func newPost(thread_id, board_id, content_id, account_id int, s *Seeder) *Post {
 	}
 }
 
+func (s *Seeder) GetWeightedBoard(adjustment int) *Board {
+	id := RandomWeightedFromMap[int](s.BoardWeights)
+	board, ok := s.BoardIDMap[id]
+	if !ok {
+		log.Fatal("reference exception: out of bounds board index", id)
+	}
+	s.BoardWeights[board.ID] = s.BoardWeights[board.ID] - adjustment
+	return board
+}
+
+func (s *Seeder) GetWeightedThread(board *Board, adjustment int) *Thread {
+	id := RandomWeightedFromMap[int](board.ThreadWeights)
+	thread, ok := board.ThreadIDMap[id]
+	if !ok {
+		log.Fatal("reference exception: out of bounds thread index", id)
+	}
+	board.ThreadWeights[thread.ID] = board.ThreadWeights[thread.ID] - adjustment
+	return thread
+}
+
+// each board --> a random number of threads are chosen from a random board. although we
+// are iterating over each board here, we choose a random thread from a random board influcned
+// by a dynamically shifting weighted distribution. it makes the data feel more natural.
 func (s *Seeder) seedPosts() {
 	var sum int = 0
-
 	for i := 0; i < len(s.Boards); i++ {
-		// each board --> a random number of threads are chosen from a random board
-		// even though we are iterating over the boards, we are choosing threads from a random board
 		num := RandomBetween[int](s.Cfg.minPostPerThread, s.Cfg.maxPostPerThread)
+		randomBoard := s.GetWeightedBoard(0)
 
-		randBoard := RandomWeightedFromMap[int](s.BoardWeights)
-		board, ok := s.BoardIDMap[randBoard]
-		if !ok {
-			log.Fatal("board map id overflow", randBoard)
-		}
-
-		for j := 0; j < len(board.ThreadIDMap); j++ {
-			// now for each board, and each thread on that board we randomly choose a thread from it
-			// each iteration. it's distrubtive and dynamic, so the distribution changes as we go
-			// so althrough we choose a random thread every post - the distribution is weighted
+		for j := 0; j < len(randomBoard.ThreadIDMap); j++ {
 			for k := 0; k < num; k++ {
 				sum++
-				boardId := RandomWeightedFromMap[int](s.BoardWeights)
-				board, ok := s.BoardIDMap[boardId]
-				if !ok {
-					log.Fatal("board map id overflow", boardId)
-				}
 
-				threadId := RandomWeightedFromMap[int](board.ThreadWeights)
-				thread, ok := board.ThreadIDMap[threadId]
-				if !ok {
-					log.Fatal("thread map id overflow", threadId)
-				}
-
-				s.BoardWeights[board.ID] = s.BoardWeights[board.ID] - (k + j)
-				board.ThreadWeights[thread.ID] = board.ThreadWeights[thread.ID] - k
+				board := s.GetWeightedBoard(k + j)
+				thread := s.GetWeightedThread(board, k)
 
 				postContent := newPostContent()
 				account := RandomFromList[*Account](s.Accounts)
@@ -1056,10 +1052,8 @@ func (s *Seeder) seedPosts() {
 				s.PostContent = append(s.PostContent, postContent)
 				s.Posts = append(s.Posts, post)
 			}
-
 		}
 	}
-
 }
 
 func (s *Seeder) insertPosts() *SeedDBError {

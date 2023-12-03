@@ -6,7 +6,6 @@ import (
 	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
-/***************************/
 /* LOREM / TEXT GENERATION */
 /***************************/
 
@@ -94,7 +93,6 @@ func defaultLoremConfig() *LoremConfig {
 	}
 }
 
-/***************************/
 /* CONFIGURATION FUNCTIONS */
 /***************************/
 
@@ -229,7 +227,6 @@ func (l *Lorem) GenerateWord() string {
 	return l.Output
 }
 
-// generates a random word defined by the configuration
 func (l *Lorem) word() string {
 	word := ""
 	wordLen := RandomBetween[int](l.Cfg.minWordLength, l.Cfg.maxWordLength)
@@ -239,7 +236,6 @@ func (l *Lorem) word() string {
 	return word
 }
 
-// generates a random sentence defined by the configuration
 func (l *Lorem) sentence() string {
 	sentence := ""
 	wordCount := RandomBetween[int](l.Cfg.minSentenceLength, l.Cfg.maxSentenceLength)
@@ -258,7 +254,6 @@ func (l *Lorem) sentence() string {
 	return sentence
 }
 
-// generates a random paragraph defined by the configuration
 func (l *Lorem) paragraph() string {
 	paragraph := string(special_chars["SPACE"]) + string(special_chars["SPACE"])
 	sentenceCount := RandomBetween[int](l.Cfg.minParagraphLength, l.Cfg.maxParagraphLength)
@@ -268,7 +263,6 @@ func (l *Lorem) paragraph() string {
 	return paragraph + string(special_chars["CRLF"]) + string(special_chars["CRLF"])
 }
 
-/*******************/
 /* SLUG GENERATION */
 /*******************/
 
@@ -303,7 +297,6 @@ func NewArticleSlug() string {
 	return slug(article_slug_charset, article_slug_min_length, article_slug_max_length)
 }
 
-/*************************/
 /* NAME/EMAIL GENERATION */
 /*************************/
 
@@ -355,8 +348,6 @@ func uwordStep(current string) string {
 		word += string(safeRandomSpecialChar())
 	}
 
-	// fmt.Println("step:", step, " og:", current, " new:", word)
-
 	return word
 }
 
@@ -373,7 +364,6 @@ func NewUsername() string {
 	return username
 }
 
-/******************/
 /* ENUM RESOLVERS */
 /******************/
 
@@ -445,12 +435,4 @@ func RandomEnumIdentityStatus() IdentityStatus {
 
 func RandomEnumIdentityStyle() IdentityStyle {
 	return IdentityStyleID[RandomBetween[int](1, len(IdentityStyleID))]
-}
-
-/*************************************************************************************************************/
-/*************************************************************************************************************/
-
-// wraps the content with the given tag as an html tag
-func WrapHTMLTag(tag, content string) string {
-	return string(special_chars["LESS-THAN"]) + tag + string(special_chars["GREATER-THAN"]) + content + string(special_chars["LESS-THAN"]) + string(special_chars["FORWARD-SLASH"]) + tag + string(special_chars["GREATER-THAN"])
 }

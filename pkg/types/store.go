@@ -9,7 +9,6 @@ import (
 
 var seeder_debug_enabled = false
 
-/******************************/
 /* POSTGRES CONFIG / DEFAULTS */
 /******************************/
 
@@ -47,9 +46,8 @@ func defaultPGConfig() *pgConfig {
 	}
 }
 
-/*******************************/
-/*** CONFIGURATION FUNCTIONS ***/
-/*******************************/
+/* CONFIGURATION FUNCTIONS */
+/***************************/
 
 func PGCfgSetUser(s string) pgConfigFunc {
 	return func(c *pgConfig) *pgConfig {
@@ -112,7 +110,6 @@ func (pgc *pgConfig) connstr() string {
 	return fmt.Sprintf(pgc.connfmt, pgc.user, pgc.password, pgc.name, pgc.host, pgc.port, pgc.ssl)
 }
 
-/*********/
 /* STORE */
 /*********/
 
@@ -138,7 +135,7 @@ func NewStore(cfg ...pgConfigFunc) (*Store, error) {
 	}, nil
 }
 
-// use for one time queries, it is extremely inefficient when batching or sending multiple queries
+// Only use this for single, simple queries, like migrations. Otherwise it's extremely inefficient.
 func (s *Store) Execute(query string) error {
 	res, err := s.DB.Exec(query)
 	if err != nil {
