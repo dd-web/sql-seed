@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/dd-web/pgsvk-seeder/pkg/database"
 	"github.com/dd-web/pgsvk-seeder/pkg/types"
@@ -18,6 +19,7 @@ var (
 
 func main() {
 	fmt.Println("Starting...")
+	start := time.Now()
 
 	store, err := types.NewStore()
 	if err != nil {
@@ -35,7 +37,10 @@ func main() {
 	fmt.Println("Finishing up...")
 	finalize(store)
 
+	finished := time.Since(start)
+
 	seeder.PrintResults()
+	fmt.Printf("Finished in %v\n\n", finished)
 }
 
 // runs migrations according to the configurations set above at the top of this file

@@ -1,7 +1,3 @@
-// internal.go
-// internal types defining the underlying data structures used by the app.
-// these types are defined according to their respective table in the database.
-
 package types
 
 import (
@@ -482,7 +478,6 @@ func defaultSeeder(s *Store) *Seeder {
 		BoardWeights: map[int]int{},
 		BoardIDMap:   map[int]*Board{},
 
-		// thread_id -> account_id (if exist in thread) identities are resolved or created on the fly
 		identityHeapIndex: map[int]map[int]*Identity{},
 	}
 }
@@ -512,7 +507,6 @@ type Seeder struct {
 	BoardWeights map[int]int
 
 	// thread_id -> account_id (if exist in thread)
-	// will either resolve or create a new one
 	identityHeapIndex map[int]map[int]*Identity
 }
 
@@ -543,9 +537,11 @@ func (s *Seeder) PrintResults() {
 		total_posts += board.PostCount
 	}
 
-	fmt.Printf("  - %v Total Threads\n", total_threads)
-	fmt.Printf("  - %v Total Posts\n", total_posts)
-	fmt.Printf("	- %v Identities\n", len(s.Identities))
+	fmt.Printf("  - %v Threads in total\n", total_threads)
+	fmt.Printf("  - %v Posts in total\n", total_posts)
+	fmt.Printf("  - %v Identities in total\n", len(s.Identities))
+
+	fmt.Printf("-------------------------\n")
 }
 
 type InsertService string
@@ -584,11 +580,16 @@ type SeedFunc func() *SeedDBError
 
 func (s *Seeder) Seed() {
 	/* Generation */
+
+	fmt.Println("Generating data...")
+
 	s.seedAccounts()
 	s.seedBoards()
 	s.seedArticles()
 	s.seedThreads()
 	s.seedPosts()
+
+	fmt.Println("Batching queries...")
 
 	/* Insert */
 	inserters := []SeedFunc{
@@ -863,6 +864,8 @@ type Identity struct {
 
 var identity_id_counter int = 0
 
+// either resolves the identity or creates a new one. each thread should have exactly one identity
+// per account regardless of the number of posts the account has made in the thread.
 func resolveIdentity(account_id int, thread_id int, board_id int, s *Seeder) *Identity {
 	exist, ok := s.identityHeapIndex[thread_id][account_id]
 	if ok {

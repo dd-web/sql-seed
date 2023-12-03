@@ -138,6 +138,7 @@ func NewStore(cfg ...pgConfigFunc) (*Store, error) {
 	}, nil
 }
 
+// use for one time queries, it is extremely inefficient when batching or sending multiple queries
 func (s *Store) Execute(query string) error {
 	res, err := s.DB.Exec(query)
 	if err != nil {
