@@ -36,15 +36,6 @@ SELECT setval(pg_get_serial_sequence('articles', 'id'),
 	(SELECT MAX(id) FROM articles));
 
 
--- thread contents id primary key update
-ALTER TABLE thread_contents
-	ALTER id ADD GENERATED ALWAYS AS IDENTITY (START WITH 1),
-	ADD PRIMARY KEY (id);
-
-SELECT setval(pg_get_serial_sequence('thread_contents', 'id'),
-	(SELECT MAX(id) FROM thread_contents));
-
-
 -- thread id primary key update
 ALTER TABLE threads
 	ALTER id ADD GENERATED ALWAYS AS IDENTITY (START WITH 1),

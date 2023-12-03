@@ -387,9 +387,9 @@ func (is IdentityStyle) ID() int {
 	return is.Int()
 }
 
-/*********************************/
 /* SEED CONFIG / APP LEVEL TYPES */
 /*********************************/
+
 var (
 	min_account_count = 100
 	max_account_count = 200

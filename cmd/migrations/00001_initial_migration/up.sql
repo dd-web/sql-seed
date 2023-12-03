@@ -126,11 +126,11 @@ VALUES
 	('creator');                  -- 3
 
 
--- thread_contents
-CREATE TABLE IF NOT EXISTS thread_contents (
-  id INT UNIQUE,
-  content TEXT NOT NULL
-);
+-- -- thread_contents
+-- CREATE TABLE IF NOT EXISTS thread_contents (
+--   id INT UNIQUE,
+--   content TEXT NOT NULL
+-- );
 
 
 -- threads

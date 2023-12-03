@@ -20,3 +20,10 @@ make run
 
 the above will build and run the binary all together. I've included a few helper tasks that might make things simpler.
 Take a look inside the _Makefile_ to check them out and use as you wish. 
+
+
+## Notes
+
+Please keep in mind this is just how I do it. it's not the right or wrong way and I'm still just trying to learn myself. No doubt the SQL is atrocious and I still have a whole lot of work to do in improving in that area. I put these public in the hopes that it might help others having the same problems as I did.
+
+The schema provided here is probably awful for an actual production environment, I did the minimum possible to get it working while still providing a solution.
